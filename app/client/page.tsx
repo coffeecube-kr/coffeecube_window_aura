@@ -7,7 +7,7 @@ export default async function ClientPage() {
 
   const { data, error } = await supabase.auth.getUser();
   if (error || !data?.user) {
-    redirect("/auth/login");
+    redirect("/client");
   }
 
   return <ClientContent user={data.user} />;

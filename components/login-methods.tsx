@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { createClient } from "@/lib/supabase/client";
 
 type ButtonType = "usage" | "barcode" | "login";
 
@@ -21,19 +20,28 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const supabase = createClient();
     setIsLoading(true);
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
-      if (error) {
-        setError(error.message);
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        setError(data.error || "로그인 중 오류가 발생했습니다.");
         return;
       }
+
       // 로그인 성공 시 /client로 리다이렉트
       router.push("/client");
     } catch (err: unknown) {

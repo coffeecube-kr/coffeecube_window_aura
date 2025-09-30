@@ -2,10 +2,12 @@
 
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { createClient } from "@/lib/supabase/client";
 import WelcomeMessage from "./WelcomeMessage";
 import UserStats from "./UserStats";
 import ActionButtons from "./ActionButtons";
-import { User, UserStats as UserStatsType } from "../types";
+import { User, EquipmentStatusData } from "../types";
 import { useRouter } from "next/navigation";
 
 interface ClientContentProps {
@@ -15,9 +17,130 @@ interface ClientContentProps {
 export default function ClientContent({ user }: ClientContentProps) {
   const router = useRouter();
 
+  // 장비 상태 관련 state
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [equipmentData, setEquipmentData] = useState<EquipmentStatusData>();
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // 중복 요청 방지를 위한 ref
+  const hasSavedInitialData = useRef(false);
+
   const handleSettingsClick = () => {
     router.push("/master");
   };
+
+  // 사용자 인증 정보 가져오기
+  const fetchUserInfo = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (!error && user) {
+        setUserId(user.id);
+      }
+    } catch (error) {
+      // 개발 환경에서만 에러 로깅
+      if (process.env.NODE_ENV === "development") {
+        console.log("User fetch error:", error);
+      }
+    }
+  }, []);
+
+  // 장비 상태 데이터 저장 API 호출
+  const saveEquipmentStatus = useCallback(async () => {
+    try {
+      if (!equipmentData) {
+        return;
+      }
+
+      // robot_code 설정 (equipmentData.robot_code 우선, 없으면 기본값)
+      const robotCode = equipmentData.robot_code || process.env.NEXT_PUBLIC_ROBOT_CODE;
+
+      const saveData = {
+        robot_code: robotCode,
+        total_weight: equipmentData.total_weight,
+        temperature: equipmentData.temperature,
+        device_status: equipmentData.device_status,
+        action_name: equipmentData.action_name || null,
+        action_response: equipmentData.action_response || null,
+        user_id: userId, // 사용자 ID 추가
+      };
+
+      const response = await fetch("/api/equipment/status/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(saveData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok && process.env.NODE_ENV === "development") {
+        // 개발 환경에서 에러 정보 로깅
+        console.log("Save API Error:", {
+          status: response.status,
+          error: result.error,
+          sentData: saveData,
+          receivedData: result.received_data,
+        });
+      }
+    } catch (error) {
+      // 개발 환경에서만 에러 로깅
+      if (process.env.NODE_ENV === "development") {
+        console.log("Save API Network Error:", error);
+      }
+    }
+  }, [equipmentData, userId]);
+
+  // API에서 장비 상태 데이터 가져오기
+  const fetchEquipmentStatus = async () => {
+    try {
+      const response = await fetch("/api/equipment/status");
+      const data = await response.json();
+
+      if (response.ok) {
+        setEquipmentData(data);
+      }
+    } catch {
+      // 에러 발생 시 기본값 유지
+    }
+  };
+
+  useEffect(() => {
+    // 초기 데이터 로드만 수행 (저장은 한 번만)
+    const initializeData = async () => {
+      if (!isInitialized) {
+        // 사용자 정보와 장비 상태 데이터를 순서대로 가져오기
+        await fetchUserInfo();
+        await fetchEquipmentStatus();
+
+        setIsInitialized(true);
+      }
+    };
+
+    initializeData();
+  }, [fetchUserInfo, isInitialized]);
+
+  // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
+  useEffect(() => {
+    const saveInitialData = async () => {
+      if (
+        isInitialized &&
+        equipmentData &&
+        userId &&
+        !hasSavedInitialData.current
+      ) {
+        await saveEquipmentStatus();
+        hasSavedInitialData.current = true;
+      }
+    };
+
+    saveInitialData();
+  }, [isInitialized, equipmentData, userId, saveEquipmentStatus]);
 
   return (
     <div className="relative flex flex-col items-center justify-start h-screen">

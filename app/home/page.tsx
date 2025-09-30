@@ -7,7 +7,7 @@ export default async function HomePage() {
 
   const { data, error } = await supabase.auth.getClaims();
   if (error || !data?.claims) {
-    redirect("/auth/login");
+    redirect("/client");
   }
 
   return <MainContent />;

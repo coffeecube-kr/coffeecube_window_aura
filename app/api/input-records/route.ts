@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { createClient } from "@/utils/supabase/server";
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,7 +12,11 @@ export async function POST(request: NextRequest) {
     } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: "인증이 필요합니다." },
+        {
+          success: false,
+          error: "인증이 필요합니다.",
+          message: "로그인이 필요합니다.",
+        },
         { status: 401 }
       );
     }
@@ -26,25 +30,36 @@ export async function POST(request: NextRequest) {
       robot_code,
     } = body;
 
+    // 입력 단위: kg 기준. 저장도 kg 기준으로 통일
+    const inputAmountKg = Number(input_amount);
+
     // 필수 필드 검증
-    if (!input_amount || !input_type) {
+    if ((!input_amount && input_amount !== 0) || !input_type) {
       return NextResponse.json(
-        { error: "투입량과 투입 타입은 필수입니다." },
+        {
+          success: false,
+          error: "투입량과 투입 타입은 필수입니다.",
+          message: "필수 필드가 누락되었습니다.",
+        },
         { status: 400 }
       );
     }
 
     // 투입량이 양수인지 확인
-    if (input_amount <= 0) {
+    if (isNaN(inputAmountKg) || inputAmountKg <= 0) {
       return NextResponse.json(
-        { error: "투입량은 0보다 커야 합니다." },
+        {
+          success: false,
+          error: "투입량은 0보다 커야 합니다.",
+          message: "올바른 투입량을 입력해주세요.",
+        },
         { status: 400 }
       );
     }
 
     const today = input_date || new Date().toISOString().split("T")[0];
 
-    // 오늘 총 투입량 조회
+    // 오늘 총 투입량 조회 (kg 기준)
     const { data: todayRecords, error: queryError } = await supabase
       .from("input_records")
       .select("input_amount")
@@ -53,19 +68,63 @@ export async function POST(request: NextRequest) {
 
     if (queryError) {
       return NextResponse.json(
-        { error: "오늘 투입량 조회에 실패했습니다." },
+        {
+          success: false,
+          error: "오늘 투입량 조회에 실패했습니다.",
+          message: queryError.message || "데이터베이스 조회 오류",
+        },
         { status: 500 }
       );
     }
 
-    // 오늘 총 투입량 계산
-    const todayTotalAmount = todayRecords.reduce(
+    // 오늘 총 투입량 계산 (kg 기준)
+    const todayTotalAmountKg = todayRecords.reduce(
       (sum, record) => sum + Number(record.input_amount),
       0
     );
 
-    // 새로운 투입 후 총량 계산
-    const newTotalAmount = todayTotalAmount + Number(input_amount);
+    // 새로운 투입 후 총량 계산 (kg 기준)
+    const newTotalAmountKg = todayTotalAmountKg + inputAmountKg;
+
+    // 하루 최대 투입량 2kg 초과 체크
+    if (todayTotalAmountKg >= 2) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "일일 투입량 한도 초과",
+          message: "오늘 이미 2kg을 투입하여 더 이상 투입할 수 없습니다.",
+          data: {
+            todayTotal: todayTotalAmountKg,
+            maxDaily: 2,
+          },
+        },
+        { status: 400 }
+      );
+    }
+
+    // 투입하려는 양이 일일 한도를 초과하는 경우, 가능한 만큼만 투입
+    let actualInputAmountKg = inputAmountKg;
+    if (newTotalAmountKg > 2) {
+      actualInputAmountKg = 2 - todayTotalAmountKg;
+      if (actualInputAmountKg <= 0) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "일일 투입량 한도 초과",
+            message: "오늘 투입 가능한 양이 없습니다.",
+            data: {
+              todayTotal: todayTotalAmountKg,
+              maxDaily: 2,
+              remainingCapacity: Math.max(0, 2 - todayTotalAmountKg),
+            },
+          },
+          { status: 400 }
+        );
+      }
+    }
+
+    // 실제 투입량 재계산
+    const finalTotalAmountKg = todayTotalAmountKg + actualInputAmountKg;
 
     // 투입 기록 생성
     const { data, error } = await supabase
@@ -73,7 +132,7 @@ export async function POST(request: NextRequest) {
       .insert({
         user_id: user.id,
         equipment_command_id: equipment_command_id || null,
-        input_amount,
+        input_amount: actualInputAmountKg, // 실제 투입량으로 저장
         input_type,
         input_date: today,
         robot_code: robot_code || null,
@@ -82,29 +141,29 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
+      const errorMessage = error.message || "투입 기록 생성에 실패했습니다.";
+      const errorDetails = error.details || "";
+
       return NextResponse.json(
-        { error: "투입 기록 생성에 실패했습니다." },
+        {
+          success: false,
+          error: "투입 기록 생성에 실패했습니다.",
+          message: errorMessage,
+          details: errorDetails,
+        },
         { status: 500 }
       );
     }
 
     // robot_code가 있는 경우 equipment_list의 last_used_at 업데이트
     if (robot_code) {
-      const { error: equipmentUpdateError } = await supabase
+      await supabase
         .from("equipment_list")
         .update({
           last_used_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         })
         .eq("robot_code", robot_code);
-
-      // equipment_list 업데이트 실패는 로그만 남기고 계속 진행
-      if (equipmentUpdateError) {
-        console.log(
-          "Equipment last_used_at 업데이트 실패:",
-          equipmentUpdateError
-        );
-      }
     }
 
     // equipment_status 테이블에 장비명령 기록 저장
@@ -117,43 +176,41 @@ export async function POST(request: NextRequest) {
     };
 
     const actionName = `${inputTypeMapping[input_type] || input_type} 투입`;
-    const actionResponse = `${input_amount}kg ${
+    const actionResponse = `${actualInputAmountKg}kg ${
       inputTypeMapping[input_type] || input_type
-    } 투입 완료`;
+    } 투입 완료${
+      actualInputAmountKg !== inputAmountKg
+        ? ` (일일 한도로 인해 ${inputAmountKg}kg → ${actualInputAmountKg}kg 조정됨)`
+        : ""
+    }`;
 
-    // 현재 장비 상태를 가져와서 업데이트
+    // 현재 장비 상태를 가져와서 업데이트 (robot_code 기준)
     const { data: currentStatus } = await supabase
       .from("equipment_status")
       .select("*")
-      .eq("equipment_id", "EQUIPMENT_001")
+      .eq("robot_code", robot_code || "EQUIPMENT_001")
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
 
     // 새로운 equipment_status 레코드 생성 (장비명령 기록 포함)
-    const { error: statusError } = await supabase
-      .from("equipment_status")
-      .insert({
-        equipment_id: "EQUIPMENT_001",
-        total_weight: currentStatus?.total_weight || 0,
-        temperature: currentStatus?.temperature || 5,
-        device_status: currentStatus?.device_status || "정상",
-        action_name: actionName,
-        action_response: actionResponse,
-      });
-
-    // equipment_status 저장 실패는 로그만 남기고 계속 진행
-    if (statusError) {
-      console.log("Equipment status 저장 실패:", statusError);
-    }
+    await supabase.from("equipment_status").insert({
+      robot_code: robot_code || "EQUIPMENT_001",
+      total_weight: currentStatus?.total_weight || 0,
+      temperature: currentStatus?.temperature || 5,
+      device_status: currentStatus?.device_status || "정상",
+      action_name: actionName,
+      action_response: actionResponse,
+      user_id: user.id,
+    });
 
     // 포인트 계산 로직 (하루 최대 2kg까지만 포인트 지급)
-    const pointEligibleAmount =
-      Math.min(newTotalAmount, 2.0) - Math.min(todayTotalAmount, 2.0);
+    const pointEligibleAmountKg =
+      Math.min(finalTotalAmountKg, 2) - Math.min(todayTotalAmountKg, 2);
 
-    if (pointEligibleAmount > 0) {
-      // 포인트 지급 (1kg당 10포인트)
-      const pointsToEarn = Math.floor(pointEligibleAmount * 10);
+    if (pointEligibleAmountKg > 0) {
+      // 포인트 지급 (0.1kg당 1포인트)
+      const pointsToEarn = Math.floor(pointEligibleAmountKg / 0.1);
 
       // 포인트 기록 생성
       const { error: pointError } = await supabase.from("user_points").insert({
@@ -168,9 +225,15 @@ export async function POST(request: NextRequest) {
         // 포인트 생성 실패해도 투입 기록은 유지
         return NextResponse.json(
           {
+            success: true,
             message: "투입 기록이 생성되었지만 포인트 지급에 실패했습니다.",
-            record: data,
-            pointsEarned: 0,
+            data: {
+              record: data,
+              pointsEarned: 0,
+              actualInputAmount: actualInputAmountKg,
+              requestedInputAmount: inputAmountKg,
+              dailyTotal: finalTotalAmountKg,
+            },
           },
           { status: 201 }
         );
@@ -178,28 +241,53 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          message: "투입 기록이 생성되었습니다.",
-          record: data,
-          pointsEarned: pointsToEarn,
-          pointEligibleAmount: pointEligibleAmount,
-          dailyTotal: newTotalAmount,
+          success: true,
+          message:
+            actualInputAmountKg !== inputAmountKg
+              ? `투입량이 일일 한도에 맞춰 조정되어 ${actualInputAmountKg}kg 투입되었습니다.`
+              : "투입 기록이 생성되었습니다.",
+          data: {
+            record: data,
+            pointsEarned: pointsToEarn,
+            pointEligibleAmount: pointEligibleAmountKg,
+            actualInputAmount: actualInputAmountKg,
+            requestedInputAmount: inputAmountKg,
+            dailyTotal: finalTotalAmountKg,
+          },
         },
         { status: 201 }
       );
     } else {
       return NextResponse.json(
         {
-          message: "투입 기록이 생성되었습니다. (일일 포인트 한도 도달)",
-          record: data,
-          pointsEarned: 0,
-          dailyTotal: newTotalAmount,
+          success: true,
+          message:
+            actualInputAmountKg !== inputAmountKg
+              ? `투입량이 일일 한도에 맞춰 조정되어 ${actualInputAmountKg}kg 투입되었습니다. (일일 포인트 한도 도달)`
+              : "투입 기록이 생성되었습니다. (일일 포인트 한도 도달)",
+          data: {
+            record: data,
+            pointsEarned: 0,
+            actualInputAmount: actualInputAmountKg,
+            requestedInputAmount: inputAmountKg,
+            dailyTotal: finalTotalAmountKg,
+          },
         },
         { status: 201 }
       );
     }
   } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "알 수 없는 오류가 발생했습니다.";
+
     return NextResponse.json(
-      { error: "서버 오류가 발생했습니다." },
+      {
+        success: false,
+        error: "서버 오류가 발생했습니다.",
+        message: errorMessage,
+      },
       { status: 500 }
     );
   }
@@ -216,7 +304,11 @@ export async function GET(request: NextRequest) {
     } = await supabase.auth.getUser();
     if (authError || !user) {
       return NextResponse.json(
-        { error: "인증이 필요합니다." },
+        {
+          success: false,
+          error: "인증이 필요합니다.",
+          message: "로그인이 필요합니다.",
+        },
         { status: 401 }
       );
     }
@@ -249,16 +341,36 @@ export async function GET(request: NextRequest) {
     const { data, error } = await query;
 
     if (error) {
+      const errorMessage = error.message || "투입 기록 조회에 실패했습니다.";
+      const errorDetails = error.details || "";
+
       return NextResponse.json(
-        { error: "투입 기록 조회에 실패했습니다." },
+        {
+          success: false,
+          error: "투입 기록 조회에 실패했습니다.",
+          message: errorMessage,
+          details: errorDetails,
+        },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ records: data });
+    return NextResponse.json({
+      success: true,
+      data: { records: data },
+    });
   } catch (error) {
+    const errorMessage =
+      error instanceof Error
+        ? error.message
+        : "알 수 없는 오류가 발생했습니다.";
+
     return NextResponse.json(
-      { error: "서버 오류가 발생했습니다." },
+      {
+        success: false,
+        error: "서버 오류가 발생했습니다.",
+        message: errorMessage,
+      },
       { status: 500 }
     );
   }

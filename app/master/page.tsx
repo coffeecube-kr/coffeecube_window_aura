@@ -2,10 +2,11 @@
 import { useState } from "react";
 import Image from "next/image";
 import AdminLoginForm from "./components/AdminLoginForm";
-
+import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 export default function MasterPage() {
   const [activeTab, setActiveTab] = useState<"id" | "barcode">("id");
-
+  const router = useRouter();
   return (
     <div className="flex flex-col items-center justify-start min-h-screen">
       <div className="w-full h-[880px] relative">
@@ -18,8 +19,16 @@ export default function MasterPage() {
       </div>
       <div className="flex flex-col justify-center px-20 max-md:px-5 w-full mt-10">
         <div className="overflow-hidden p-11 w-full rounded-2xl bg-zinc-100 max-md:px-5 max-md:max-w-full">
-          <div className="text-3xl font-extrabold text-zinc-800 max-md:max-w-full">
-            관리자 로그인
+          <div className="text-3xl font-extrabold text-zinc-800 max-md:max-w-full flex flex-row gap-2 justify-between items-center">
+            <div>관리자 로그인</div>
+            <Button
+              variant="outline"
+              onClick={() => router.push("/")}
+              className="text-[24px] text-black w-[158px] h-[69px] bg-[#E3E3E3]"
+            >
+              
+              홈으로 이동
+            </Button>
           </div>
           <div className="flex flex-wrap gap-4 items-start mt-8 w-full text-2xl font-extrabold leading-snug text-center max-md:max-w-full">
             <button

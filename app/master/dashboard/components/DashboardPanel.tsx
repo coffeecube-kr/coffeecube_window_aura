@@ -1,30 +1,100 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { ProgressModal } from "@/components/ui/progress-modal";
 import { ErrorModal } from "@/components/ui/error-modal";
 import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/client";
 import type { EquipmentStatusData } from "./types";
 
 export default function DashboardPanel() {
   const [activeTab, setActiveTab] = useState<"status" | "command">("status");
   const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   // 장비 상태 데이터
-  const [equipmentData, setEquipmentData] = useState<EquipmentStatusData>({
-    equipment_id: "EQUIPMENT_001",
-    total_weight: 15,
-    temperature: 4,
-    device_status: "정상",
-  });
+  const [equipmentData, setEquipmentData] = useState<EquipmentStatusData>();
+
+  // 사용자 정보
+  const [userId, setUserId] = useState<string | null>(null);
 
   // Modal 상태 관리
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalTitle, setModalTitle] = useState("");
   const [isErrorModalOpen, setIsErrorModalOpen] = useState(false);
   const [showErrorAfterProgress, setShowErrorAfterProgress] = useState(false);
+
+  // 중복 요청 방지를 위한 ref
+  const hasSavedInitialData = useRef(false);
+
+  // 사용자 인증 정보 가져오기
+  const fetchUserInfo = useCallback(async () => {
+    try {
+      const supabase = createClient();
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (!error && user) {
+        setUserId(user.id);
+      }
+    } catch (error) {
+      // 개발 환경에서만 에러 로깅
+      if (process.env.NODE_ENV === "development") {
+        console.log("User fetch error:", error);
+      }
+    }
+  }, []);
+
+  // 장비 상태 데이터 저장 API 호출
+  const saveEquipmentStatus = useCallback(async () => {
+    try {
+      if (!equipmentData) {
+        return;
+      }
+
+      // robot_code 설정 (equipmentData.robot_code 우선, 없으면 기본값)
+      const robotCode = equipmentData.robot_code || process.env.NEXT_PUBLIC_ROBOT_CODE;
+
+      const saveData = {
+        robot_code: robotCode,
+        total_weight: equipmentData.total_weight,
+        temperature: equipmentData.temperature,
+        device_status: equipmentData.device_status,
+        action_name: equipmentData.action_name || null,
+        action_response: equipmentData.action_response || null,
+        user_id: userId, // 사용자 ID 추가
+      };
+
+      const response = await fetch("/api/equipment/status/save", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(saveData),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok && process.env.NODE_ENV === "development") {
+        // 개발 환경에서 에러 정보 로깅
+        console.log("Save API Error:", {
+          status: response.status,
+          error: result.error,
+          sentData: saveData,
+          receivedData: result.received_data,
+        });
+      }
+    } catch (error) {
+      // 개발 환경에서만 에러 로깅
+      if (process.env.NODE_ENV === "development") {
+        console.log("Save API Network Error:", error);
+      }
+    }
+  }, [equipmentData, userId]);
 
   // API에서 장비 상태 데이터 가져오기
   const fetchEquipmentStatus = async () => {
@@ -43,9 +113,36 @@ export default function DashboardPanel() {
   };
 
   useEffect(() => {
-    // 초기 데이터 로드만 실행
-    fetchEquipmentStatus();
-  }, []);
+    // 초기 데이터 로드만 수행 (저장은 한 번만)
+    const initializeData = async () => {
+      if (!isInitialized) {
+        // 사용자 정보와 장비 상태 데이터를 순서대로 가져오기
+        await fetchUserInfo();
+        await fetchEquipmentStatus();
+
+        setIsInitialized(true);
+      }
+    };
+
+    initializeData();
+  }, [fetchUserInfo, isInitialized]);
+
+  // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
+  useEffect(() => {
+    const saveInitialData = async () => {
+      if (
+        isInitialized &&
+        equipmentData &&
+        userId &&
+        !hasSavedInitialData.current
+      ) {
+        await saveEquipmentStatus();
+        hasSavedInitialData.current = true;
+      }
+    };
+
+    saveInitialData();
+  }, [isInitialized, equipmentData, userId, saveEquipmentStatus]);
 
   // 버튼 클릭 핸들러
   const handleCommandClick = async (commandNumber: number) => {
@@ -144,7 +241,7 @@ export default function DashboardPanel() {
                       />
                     </div>
                     <div className="text-4xl font-bold leading-[56px] text-neutral-800 max-md:text-4xl max-sm:text-3xl">
-                      {equipmentData.total_weight}kg
+                      {equipmentData?.total_weight}kg
                     </div>
                   </>
                 )}
@@ -172,7 +269,7 @@ export default function DashboardPanel() {
                       />
                     </div>
                     <div className="text-4xl font-bold leading-[56px] text-neutral-800 max-md:text-4xl max-sm:text-3xl">
-                      {equipmentData.temperature}°C
+                      {equipmentData?.temperature}°C
                     </div>
                   </>
                 )}
@@ -194,9 +291,9 @@ export default function DashboardPanel() {
                     <div>
                       <Image
                         src={
-                          equipmentData.device_status === "정상"
+                          equipmentData?.device_status === "정상"
                             ? "/check.svg"
-                            : equipmentData.device_status === "수거필요"
+                            : equipmentData?.device_status === "수거필요"
                             ? "/refresh.svg"
                             : "/error.svg"
                         }
@@ -207,14 +304,14 @@ export default function DashboardPanel() {
                     </div>
                     <div
                       className={`text-4xl font-bold leading-[56px] whitespace-nowrap max-md:text-4xl max-sm:text-3xl ${
-                        equipmentData.device_status === "정상"
+                        equipmentData?.device_status === "정상"
                           ? "text-primary"
-                          : equipmentData.device_status === "수거필요"
+                          : equipmentData?.device_status === "수거필요"
                           ? "text-[#0E8FEB]"
                           : "text-[#DE1443]"
                       }`}
                     >
-                      {equipmentData.device_status}
+                      {equipmentData?.device_status}
                     </div>
                   </>
                 )}
@@ -223,7 +320,6 @@ export default function DashboardPanel() {
           </div>
 
           {/* 최근 명령 기록 */}
-         
         </>
       ) : (
         <div className="grid grid-cols-3 gap-4 w-full max-md:grid-cols-2 max-sm:grid-cols-1">

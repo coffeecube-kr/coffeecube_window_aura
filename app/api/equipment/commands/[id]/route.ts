@@ -33,7 +33,7 @@ export async function POST(
     const { data: currentData, error: fetchError } = await supabase
       .from("equipment_status")
       .select("*")
-      .eq("equipment_id", "EQUIPMENT_001")
+      .eq("robot_code", process.env.NEXT_PUBLIC_ROBOT_CODE)
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
@@ -52,7 +52,7 @@ export async function POST(
       const { data, error } = await supabase
         .from("equipment_status")
         .insert({
-          equipment_id: currentData.equipment_id,
+          robot_code: currentData.robot_code,
           total_weight: currentData.total_weight,
           temperature: currentData.temperature,
           device_status: currentData.device_status,
@@ -71,7 +71,7 @@ export async function POST(
       const { data, error } = await supabase
         .from("equipment_status")
         .insert({
-          equipment_id: "EQUIPMENT_001",
+          robot_code: process.env.NEXT_PUBLIC_ROBOT_CODE,
           total_weight: 15,
           temperature: 4,
           device_status: "정상",
@@ -91,7 +91,7 @@ export async function POST(
       message: `${actionName}이 ${actionResponse}했습니다.`,
       success: isSuccess,
       data: {
-        equipment_id: updatedData.equipment_id,
+        robot_code: updatedData.robot_code,
         total_weight: Number(updatedData.total_weight),
         temperature: Number(updatedData.temperature),
         device_status: updatedData.device_status,

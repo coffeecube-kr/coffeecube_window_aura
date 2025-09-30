@@ -61,9 +61,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 데이터 처리
-    const totalInput = cumulativeData?.total_input_amount || 0;
-    const todayInput = todayData?.daily_input_amount || 0;
+    // 데이터 처리 (이미 kg 단위로 집계되어 있다고 가정)
+    const totalInputKg = Number(cumulativeData?.total_input_amount || 0);
+    const todayInputKg = Number(todayData?.daily_input_amount || 0);
+
+    // 표시 단위는 kg로 통일 (소수점 한 자리)
+    const totalInput = totalInputKg.toFixed(1);
+    const todayInput = todayInputKg.toFixed(1);
     const totalPoints =
       pointsData?.reduce((sum, point) => sum + point.points_earned, 0) || 0;
 
