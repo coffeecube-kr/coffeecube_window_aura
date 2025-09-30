@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Modal } from "@/components/ui/modal";
 
 type ButtonType = "usage" | "barcode" | "login";
 
@@ -16,6 +17,7 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -38,7 +40,19 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "로그인 중 오류가 발생했습니다.");
+        let errorMessage = data.error || "로그인 중 오류가 발생했습니다.";
+
+        // Invalid credentials 에러를 한국어로 변환
+        if (
+          errorMessage.toLowerCase().includes("invalid") &&
+          (errorMessage.toLowerCase().includes("credential") ||
+            errorMessage.toLowerCase().includes("login"))
+        ) {
+          errorMessage = "아이디/비밀번호가 일치하지 않습니다.";
+        }
+
+        setError(errorMessage);
+        setShowErrorModal(true);
         return;
       }
 
@@ -48,6 +62,7 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
       setError(
         err instanceof Error ? err.message : "로그인 중 오류가 발생했습니다."
       );
+      setShowErrorModal(true);
     } finally {
       setIsLoading(false);
     }
@@ -92,11 +107,6 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
                   required
                 />
               </div>
-              {error && (
-                <div className="mb-4 p-3 text-red-600 bg-red-50 rounded-md text-sm">
-                  {error}
-                </div>
-              )}
               <Button
                 type="submit"
                 className="w-full h-[82px] text-[24px] font-bold bg-primary hover:bg-primary/90"
@@ -107,6 +117,14 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
             </form>
           </div>
         </div>
+        <Modal
+          isOpen={showErrorModal}
+          onClose={() => setShowErrorModal(false)}
+          title="로그인 실패"
+          description={error || "로그인 중 오류가 발생했습니다."}
+          confirmText="확인"
+          variant="default"
+        />
       </div>
     );
   }
@@ -147,11 +165,6 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
                 required
               />
             </div>
-            {error && (
-              <div className="mb-4 p-3 text-red-600 bg-red-50 rounded-md text-sm">
-                {error}
-              </div>
-            )}
             <Button
               type="submit"
               className="w-full h-[82px] text-[24px] font-bold bg-primary hover:bg-primary/90"
@@ -161,6 +174,14 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
             </Button>
           </form>
         </div>
+        <Modal
+          isOpen={showErrorModal}
+          onClose={() => setShowErrorModal(false)}
+          title="로그인 실패"
+          description={error || "로그인 중 오류가 발생했습니다."}
+          confirmText="확인"
+          variant="default"
+        />
       </div>
     );
   }
@@ -203,6 +224,14 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
           </div>
         </div>
       </div>
+      <Modal
+        isOpen={showErrorModal}
+        onClose={() => setShowErrorModal(false)}
+        title="로그인 실패"
+        description={error || "로그인 중 오류가 발생했습니다."}
+        confirmText="확인"
+        variant="destructive"
+      />
     </div>
   );
 }
