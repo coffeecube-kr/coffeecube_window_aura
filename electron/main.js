@@ -1,48 +1,14 @@
 const { app, BrowserWindow } = require('electron');
 const path = require('path');
-const { spawn } = require('child_process');
 
 const isDev = process.env.NODE_ENV === 'development';
+const VERCEL_URL = 'https://coffeecube-window-omega.vercel.app';
 let mainWindow;
-let nextServer;
-
-function startNextServer() {
-  return new Promise((resolve, reject) => {
-    const nextPath = path.join(__dirname, '../node_modules/.bin/next');
-    const isWindows = process.platform === 'win32';
-    const nextCommand = isWindows ? `${nextPath}.cmd` : nextPath;
-    
-    nextServer = spawn(nextCommand, ['start', '-p', '3001'], {
-      cwd: path.join(__dirname, '..'),
-      shell: isWindows,
-      env: { ...process.env }
-    });
-
-    nextServer.stdout.on('data', (data) => {
-      console.log(`Next.js: ${data}`);
-      if (data.toString().includes('Ready') || data.toString().includes('started server')) {
-        resolve();
-      }
-    });
-
-    nextServer.stderr.on('data', (data) => {
-      console.error(`Next.js Error: ${data}`);
-    });
-
-    nextServer.on('error', (error) => {
-      console.error('Failed to start Next.js server:', error);
-      reject(error);
-    });
-
-    // 15초 후에도 시작되지 않으면 resolve (이미 시작되었을 수 있음)
-    setTimeout(() => resolve(), 15000);
-  });
-}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    width: 1080,
+    height: 1920,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -51,23 +17,46 @@ function createWindow() {
     icon: path.join(__dirname, '../public/favicon.ico')
   });
 
-  const startUrl = isDev ? 'http://localhost:3000' : 'http://localhost:3001';
-  mainWindow.loadURL(startUrl);
+  // 모바일 viewport 시뮬레이션 설정
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.setUserAgent(
+      'Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36'
+    );
+    
+    // Viewport를 1080x1920으로 설정
+    mainWindow.webContents.executeJavaScript(`
+      const meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=1080, initial-scale=1.0, maximum-scale=1.0, user-scalable=no';
+      document.head.appendChild(meta);
+    `);
+  });
 
-  if (isDev) {
-    mainWindow.webContents.openDevTools();
-  }
+  // 개발 환경에서는 로컬 서버, 프로덕션에서는 Vercel URL 사용
+  const startUrl = isDev ? 'http://localhost:3000' : VERCEL_URL;
+  
+  console.log('Loading URL:', startUrl);
+  
+  mainWindow.loadURL(startUrl).catch(err => {
+    console.error('Failed to load URL:', err);
+  });
+
+  // 로딩 실패 시 에러 로그
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.error('Failed to load:', errorCode, errorDescription);
+  });
+
+  // 페이지 로드 완료 시 로그
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('Page loaded successfully');
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
 
-app.whenReady().then(async () => {
-  if (!isDev) {
-    await startNextServer();
-  }
-  
+app.whenReady().then(() => {
   createWindow();
 
   app.on('activate', () => {
@@ -78,16 +67,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-  if (nextServer) {
-    nextServer.kill();
-  }
   if (process.platform !== 'darwin') {
     app.quit();
-  }
-});
-
-app.on('before-quit', () => {
-  if (nextServer) {
-    nextServer.kill();
   }
 });
