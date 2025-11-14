@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,17 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
   const router = useRouter();
+  const barcodeEmailInputRef = useRef<HTMLInputElement>(null);
+  const loginEmailInputRef = useRef<HTMLInputElement>(null);
+
+  // 바코드 로그인 또는 ID 로그인 버튼이 활성화되면 이메일 입력 필드에 포커스
+  useEffect(() => {
+    if (activeButton === "barcode" && barcodeEmailInputRef.current) {
+      barcodeEmailInputRef.current.focus();
+    } else if (activeButton === "login" && loginEmailInputRef.current) {
+      loginEmailInputRef.current.focus();
+    }
+  }, [activeButton]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,22 +99,29 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
 
           {/* 아이디/비밀번호 로그인 섹션 추가 */}
           <div className="">
-            <form onSubmit={handleLogin}>
+            <form onSubmit={handleLogin} autoComplete="off">
               <div className="flex gap-4 mb-6">
                 <Input
-                  type="email"
+                  ref={barcodeEmailInputRef}
+                  type="text"
+                  name="barcode-email-field"
                   placeholder="   이메일"
                   className="flex-1 h-12 text-lg bg-white"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  autoComplete="nope"
+                  data-form-type="other"
                   required
                 />
                 <Input
                   type="password"
+                  name="barcode-password-field"
                   placeholder="   비밀번호"
                   className="flex-1 h-12 text-lg bg-white"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  data-form-type="other"
                   required
                 />
               </div>
@@ -146,22 +164,29 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
           >
             회원가입 시 사용한 이메일을 통해 로그인 할 수 있습니다.
           </div>
-          <form onSubmit={handleLogin}>
+          <form onSubmit={handleLogin} autoComplete="off">
             <div className="flex gap-4 mb-6">
               <Input
-                type="email"
+                ref={loginEmailInputRef}
+                type="text"
+                name="login-email-field"
                 placeholder="   이메일"
                 className="flex-1 h-12 text-lg bg-white"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                autoComplete="nope"
+                data-form-type="other"
                 required
               />
               <Input
                 type="password"
+                name="login-password-field"
                 placeholder="   비밀번호"
                 className="flex-1 h-12 text-lg bg-white"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+                data-form-type="other"
                 required
               />
             </div>

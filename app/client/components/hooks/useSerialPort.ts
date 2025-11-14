@@ -23,8 +23,18 @@ export const useSerialPort = (): SerialPortHook => {
         return false;
       }
 
-      // 포트 선택 (사용자가 COM1 선택)
-      const port = await navigator.serial.requestPort();
+      let port: SerialPort;
+
+      // 이미 권한이 부여된 포트가 있는지 확인
+      const ports = await navigator.serial.getPorts();
+      
+      if (ports.length > 0) {
+        // 이미 권한이 있는 포트 사용 (첫 번째 포트)
+        port = ports[0];
+      } else {
+        // 권한이 없으면 사용자에게 포트 선택 요청
+        port = await navigator.serial.requestPort();
+      }
       
       // 포트 열기
       await port.open({ 

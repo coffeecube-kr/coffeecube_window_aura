@@ -27,7 +27,7 @@ export default function ActionButtons() {
     // COM1에 (IBNP) 전송
     const success = await sendCommand("(IBNP)");
     
-    if (!success || serialError) {
+    if (!success) {
       setErrorTitle("시리얼 통신 오류");
       setErrorMessage(serialError || "명령 전송에 실패했습니다.");
       setShowErrorAfterProgress(true);
@@ -43,7 +43,7 @@ export default function ActionButtons() {
     // COM1에 (IBMP) 전송
     const success = await sendCommand("(IBMP)");
     
-    if (!success || serialError) {
+    if (!success) {
       setErrorTitle("시리얼 통신 오류");
       setErrorMessage(serialError || "명령 전송에 실패했습니다.");
       setShowErrorAfterProgress(true);
@@ -59,7 +59,7 @@ export default function ActionButtons() {
     // COM1에 (IBNP) 전송
     const success = await sendCommand("(IBNP)");
     
-    if (!success || serialError) {
+    if (!success) {
       setErrorTitle("시리얼 통신 오류");
       setErrorMessage(serialError || "명령 전송에 실패했습니다.");
       setShowErrorAfterProgress(true);
