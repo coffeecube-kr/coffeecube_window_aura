@@ -304,6 +304,56 @@ export default function DashboardPanel() {
     saveInitialData();
   }, [isInitialized, equipmentData, userId, saveEquipmentStatus]);
 
+  // 중량 초기화 버튼 클릭 핸들러
+  const handleResetWeight = async () => {
+    if (!robotCode) {
+      toast.error("장비 번호가 설정되지 않았습니다.");
+      return;
+    }
+
+    setModalTitle("중량 초기화");
+    setIsModalOpen(true);
+    setIsProcessing(true);
+    setProgress(0);
+
+    try {
+      // 프로그레스 시작
+      setProgress(30);
+
+      const response = await fetch("/api/equipment/reset-weight", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ robot_code: robotCode }),
+      });
+
+      setProgress(60);
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        setErrorTitle("초기화 오류");
+        setErrorMessage(result.error || "중량 초기화에 실패했습니다.");
+        setShowErrorAfterProgress(true);
+        setIsProcessing(false);
+        return;
+      }
+
+      setProgress(100);
+      // toast.success("중량이 초기화되었습니다.");
+
+      // 장비 상태 업데이트
+      await fetchEquipmentStatus();
+    } catch (error) {
+      setErrorTitle("네트워크 오류");
+      setErrorMessage("중량 초기화 중 오류가 발생했습니다.");
+      setShowErrorAfterProgress(true);
+    }
+
+    setIsProcessing(false);
+  };
+
   // 버튼 클릭 핸들러
   const handleCommandClick = async (button: AdminButton) => {
     setModalTitle(button.name);
@@ -579,6 +629,16 @@ export default function DashboardPanel() {
         </>
       ) : (
         <div className="grid grid-cols-3 gap-4 w-full max-md:grid-cols-2 max-sm:grid-cols-1">
+          {/* 중량 초기화 버튼 - 가장 첫 번째 */}
+          <Button
+            className="flex items-center justify-center h-[120px] text-[24px] font-extrabold text-white bg-primary rounded-xl disabled:opacity-50"
+            onClick={handleResetWeight}
+            disabled={isProcessing}
+          >
+            중량 초기화
+          </Button>
+
+          {/* 나머지 admin 버튼들 */}
           {buttons.length > 0 ? (
             buttons.map((button) => (
               <Button
