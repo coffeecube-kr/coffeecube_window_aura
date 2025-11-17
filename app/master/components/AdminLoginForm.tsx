@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { RobotCodeSelectorModal } from "@/components/ui/robot-code-selector-modal";
 
 interface AdminLoginFormProps {
   activeTab: "id" | "barcode";
@@ -23,6 +24,7 @@ export default function AdminLoginForm({ activeTab }: AdminLoginFormProps) {
   const [modalTitle, setModalTitle] = useState("");
   const [modalMessage, setModalMessage] = useState("");
   const [modalType, setModalType] = useState<"error" | "success">("error");
+  const [isRobotCodeModalOpen, setIsRobotCodeModalOpen] = useState(false);
   const router = useRouter();
   const emailInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,6 +57,14 @@ export default function AdminLoginForm({ activeTab }: AdminLoginFormProps) {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // robot_code 체크
+    const robotCode = localStorage.getItem("robot_code");
+    if (!robotCode) {
+      setIsRobotCodeModalOpen(true);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -105,6 +115,11 @@ export default function AdminLoginForm({ activeTab }: AdminLoginFormProps) {
 
   const closeModal = () => {
     setIsModalOpen(false);
+  };
+
+  const handleRobotCodeSelect = (robotCode: string) => {
+    setIsRobotCodeModalOpen(false);
+    // 로봇 코드 선택 후 자동으로 로그인 시도하지 않고 사용자가 다시 로그인 버튼을 누르도록 함
   };
 
   return (
@@ -173,6 +188,12 @@ export default function AdminLoginForm({ activeTab }: AdminLoginFormProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <RobotCodeSelectorModal
+        isOpen={isRobotCodeModalOpen}
+        onClose={() => setIsRobotCodeModalOpen(false)}
+        onSelect={handleRobotCodeSelect}
+      />
     </>
   );
 }

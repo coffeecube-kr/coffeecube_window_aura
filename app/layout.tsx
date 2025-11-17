@@ -3,6 +3,7 @@ import { ThemeProvider } from "next-themes";
 import { Toaster } from "sonner";
 import "./globals.css";
 import KioskModeToggle from "./components/KioskModeToggle";
+import RobotCodeDisplay from "./components/RobotCodeDisplay";
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -63,7 +64,8 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <Toaster />
-          <KioskModeToggle />
+          {/* <KioskModeToggle /> */}
+          <RobotCodeDisplay />
           <div className="kiosk-container">{children}</div>
         </ThemeProvider>
       </body>

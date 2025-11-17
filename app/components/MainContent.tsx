@@ -8,7 +8,6 @@ import { useState, useEffect } from "react";
 import WayIcon from "./icons/WayIcon";
 import BarcodeIcon from "./icons/BarcodeIcon";
 import LoginIcon from "./icons/LoginIcon";
-import { RobotCodeSelectorModal } from "@/components/ui/robot-code-selector-modal";
 
 type ButtonType = "usage" | "barcode" | "login";
 
@@ -16,36 +15,6 @@ export default function MainContent() {
   const router = useRouter();
   const [activeButton, setActiveButton] = useState<ButtonType | null>(null);
   const [hoveredButton, setHoveredButton] = useState<ButtonType | null>(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [robotCode, setRobotCode] = useState<string>("");
-
-  useEffect(() => {
-    const storedCode = localStorage.getItem("robot_code");
-    if (storedCode) {
-      setRobotCode(storedCode);
-    } else {
-      setIsModalOpen(true);
-    }
-
-    // robot_code 변경 이벤트 리스너
-    const handleRobotCodeChange = () => {
-      const newCode = localStorage.getItem("robot_code");
-      if (newCode) {
-        setRobotCode(newCode);
-      }
-    };
-
-    window.addEventListener("robot_code_changed", handleRobotCodeChange);
-    return () => {
-      window.removeEventListener("robot_code_changed", handleRobotCodeChange);
-    };
-  }, []);
-
-  const handleRobotCodeSelect = (code: string) => {
-    localStorage.setItem("robot_code", code);
-    setRobotCode(code);
-    window.dispatchEvent(new Event("robot_code_changed"));
-  };
 
   const getTopImage = () => {
     switch (activeButton) {
@@ -90,14 +59,6 @@ export default function MainContent() {
         </Button>
         <div className="w-full h-[880px] relative">
           <Image src={getTopImage()} alt="logo" fill className="object-cover" />
-          <input
-            type="text"
-            value={robotCode}
-            readOnly
-            onClick={() => setIsModalOpen(true)}
-            className="absolute top-8 right-8 px-6 py-3 text-lg font-bold text-neutral-700 bg-white border-2 border-neutral-300 rounded-xl cursor-pointer hover:border-primary hover:shadow-lg transition-all shadow-md z-10"
-            placeholder="로봇 코드 선택"
-          />
         </div>
         <div className="flex-1 w-full mt-10">
           <div className="w-full h-[537px] flex px-20 flex-col gap-y-9 mb-[463px]">
@@ -161,11 +122,6 @@ export default function MainContent() {
           </div>
         </div>
       </div>
-      <RobotCodeSelectorModal
-        isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
-        onSelect={handleRobotCodeSelect}
-      />
     </>
   );
 }

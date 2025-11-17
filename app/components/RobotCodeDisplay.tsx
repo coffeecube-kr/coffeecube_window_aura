@@ -11,7 +11,23 @@ export default function RobotCodeDisplay() {
     const storedCode = localStorage.getItem("robot_code");
     if (storedCode) {
       setRobotCode(storedCode);
+    } else {
+      // 로봇 코드가 없으면 모달 자동 열기
+      setIsModalOpen(true);
     }
+
+    // robot_code 변경 이벤트 리스너
+    const handleRobotCodeChange = () => {
+      const newCode = localStorage.getItem("robot_code");
+      if (newCode) {
+        setRobotCode(newCode);
+      }
+    };
+
+    window.addEventListener("robot_code_changed", handleRobotCodeChange);
+    return () => {
+      window.removeEventListener("robot_code_changed", handleRobotCodeChange);
+    };
   }, []);
 
   const handleSelect = (code: string) => {

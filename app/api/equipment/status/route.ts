@@ -3,20 +3,20 @@ import { createClient } from "@/lib/supabase/server";
 
 // 장비 상태 데이터를 모사하는 함수
 function generateMockEquipmentData(robotCode: string) {
-  const statuses = ["정상", "수거필요", "장애발생"] as const;
-  const randomStatus = statuses[Math.floor(Math.random() * statuses.length)];
-
   return {
     robot_code: robotCode,
     total_weight: Number((Math.random() * 30 + 5).toFixed(2)), // 5kg ~ 35kg
-    temperature: Number((Math.random() * 8 + 1).toFixed(1)), // 1°C ~ 9°C
-    device_status: randomStatus,
+    temperature: 99, // 항상 99 (클라이언트에서 serial 통신으로 덮어씀)
+    device_status: "장애발생" as const, // 항상 장애발생 (클라이언트에서 serial 통신으로 덮어씀)
+    action_name: null as string | null,
+    action_response: null as string | null,
   };
 }
 
-// GET: 현재 장비 상태 조회 (임의 데이터 반환)
+// GET: 현재 장비 상태 조회 (equipment_status에서 최신 데이터 + equipment_list의 bucket 데이터)
 export async function GET(request: NextRequest) {
   try {
+    const supabase = await createClient();
     const { searchParams } = new URL(request.url);
     const robotCode = searchParams.get("robot_code");
 
@@ -27,9 +27,42 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // 항상 임의의 장비 상태 데이터 생성 및 반환
-    const mockData = generateMockEquipmentData(robotCode);
-    return NextResponse.json(mockData);
+    // equipment_status에서 최신 데이터 가져오기
+    const { data: statusData } = await supabase
+      .from("equipment_status")
+      .select(
+        "total_weight, temperature, device_status, action_name, action_response"
+      )
+      .eq("robot_code", robotCode)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .single();
+
+    // equipment_list에서 bucket 데이터 가져오기
+    const { data: equipmentData } = await supabase
+      .from("equipment_list")
+      .select("bucket1, bucket2, bucket3, bucket4")
+      .eq("robot_code", robotCode)
+      .single();
+
+    // 데이터가 없으면 기본값 생성
+    const mockData = statusData || generateMockEquipmentData(robotCode);
+
+    // bucket 데이터와 함께 응답
+    const responseData = {
+      robot_code: robotCode,
+      total_weight: mockData.total_weight,
+      temperature: mockData.temperature,
+      device_status: mockData.device_status,
+      action_name: mockData.action_name || null,
+      action_response: mockData.action_response || null,
+      bucket1: equipmentData?.bucket1 || 0,
+      bucket2: equipmentData?.bucket2 || 0,
+      bucket3: equipmentData?.bucket3 || 0,
+      bucket4: equipmentData?.bucket4 || 0,
+    };
+
+    return NextResponse.json(responseData);
   } catch (error) {
     return NextResponse.json(
       { error: "장비 상태 조회 중 오류가 발생했습니다." },
