@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { ThemeProvider } from "next-themes";
+import { Toaster } from "sonner";
 import "./globals.css";
 import KioskModeToggle from "./components/KioskModeToggle";
 
@@ -29,12 +30,14 @@ export const metadata: Metadata = {
     type: "website",
     siteName: "Coffee Cube Kiosk",
     title: "Coffee Cube Admin | 커피큐브 키오스크",
-    description: "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
+    description:
+      "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
   },
   twitter: {
     card: "summary",
     title: "Coffee Cube Admin | 커피큐브 키오스크",
-    description: "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
+    description:
+      "커피박 수거 시스템 - 키오스크를 통해 커피박을 수거할 수 있습니다.",
   },
 };
 
@@ -59,10 +62,9 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <Toaster />
           <KioskModeToggle />
-          <div className="kiosk-container">
-            {children}
-          </div>
+          <div className="kiosk-container">{children}</div>
         </ThemeProvider>
       </body>
     </html>

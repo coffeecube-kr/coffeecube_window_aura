@@ -19,6 +19,7 @@ export default function DashboardPanel() {
 
   // 사용자 정보
   const [userId, setUserId] = useState<string | null>(null);
+  const [robotCode, setRobotCode] = useState<string>("");
 
   // Modal 상태 관리
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -28,6 +29,27 @@ export default function DashboardPanel() {
 
   // 중복 요청 방지를 위한 ref
   const hasSavedInitialData = useRef(false);
+
+  // localStorage에서 robot_code 가져오기
+  useEffect(() => {
+    const storedCode = localStorage.getItem("robot_code");
+    if (storedCode) {
+      setRobotCode(storedCode);
+    }
+
+    // robot_code 변경 이벤트 리스너
+    const handleRobotCodeChange = () => {
+      const newCode = localStorage.getItem("robot_code");
+      if (newCode) {
+        setRobotCode(newCode);
+      }
+    };
+
+    window.addEventListener("robot_code_changed", handleRobotCodeChange);
+    return () => {
+      window.removeEventListener("robot_code_changed", handleRobotCodeChange);
+    };
+  }, []);
 
   // 사용자 인증 정보 가져오기
   const fetchUserInfo = useCallback(async () => {
@@ -52,12 +74,9 @@ export default function DashboardPanel() {
   // 장비 상태 데이터 저장 API 호출
   const saveEquipmentStatus = useCallback(async () => {
     try {
-      if (!equipmentData) {
+      if (!equipmentData || !robotCode) {
         return;
       }
-
-      // robot_code 설정 (equipmentData.robot_code 우선, 없으면 기본값)
-      const robotCode = equipmentData.robot_code || process.env.NEXT_PUBLIC_ROBOT_CODE;
 
       const saveData = {
         robot_code: robotCode,
@@ -94,12 +113,16 @@ export default function DashboardPanel() {
         console.log("Save API Network Error:", error);
       }
     }
-  }, [equipmentData, userId]);
+  }, [equipmentData, userId, robotCode]);
 
   // API에서 장비 상태 데이터 가져오기
-  const fetchEquipmentStatus = async () => {
+  const fetchEquipmentStatus = useCallback(async () => {
     try {
-      const response = await fetch("/api/equipment/status");
+      if (!robotCode) return;
+
+      const response = await fetch(
+        `/api/equipment/status?robot_code=${robotCode}`
+      );
       const data = await response.json();
 
       if (response.ok) {
@@ -110,12 +133,12 @@ export default function DashboardPanel() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [robotCode]);
 
   useEffect(() => {
     // 초기 데이터 로드만 수행 (저장은 한 번만)
     const initializeData = async () => {
-      if (!isInitialized) {
+      if (!isInitialized && robotCode) {
         // 사용자 정보와 장비 상태 데이터를 순서대로 가져오기
         await fetchUserInfo();
         await fetchEquipmentStatus();
@@ -125,7 +148,7 @@ export default function DashboardPanel() {
     };
 
     initializeData();
-  }, [fetchUserInfo, isInitialized]);
+  }, [fetchUserInfo, fetchEquipmentStatus, isInitialized, robotCode]);
 
   // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
   useEffect(() => {
@@ -153,6 +176,10 @@ export default function DashboardPanel() {
       // 장비명령 API 호출
       const response = await fetch(`/api/equipment/commands/${commandNumber}`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ robot_code: robotCode }),
       });
       const result = await response.json();
 

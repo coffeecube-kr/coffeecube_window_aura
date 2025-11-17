@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
@@ -24,6 +24,23 @@ export default function AdminLoginForm({ activeTab }: AdminLoginFormProps) {
   const [modalMessage, setModalMessage] = useState("");
   const [modalType, setModalType] = useState<"error" | "success">("error");
   const router = useRouter();
+  const emailInputRef = useRef<HTMLInputElement>(null);
+
+  // 브라우저 자동완성 방지를 위한 무작위 name 생성
+  const randomFieldNames = useMemo(
+    () => ({
+      email: `admin-email-${Math.random().toString(36).substring(2, 15)}`,
+      password: `admin-password-${Math.random().toString(36).substring(2, 15)}`,
+    }),
+    []
+  );
+
+  // activeTab이 변경될 때마다 이메일 입력 필드에 포커스
+  useEffect(() => {
+    if (emailInputRef.current) {
+      emailInputRef.current.focus();
+    }
+  }, [activeTab]);
 
   const showModal = (
     title: string,
@@ -95,25 +112,33 @@ export default function AdminLoginForm({ activeTab }: AdminLoginFormProps) {
       <form
         onSubmit={handleLogin}
         className="mt-8 w-full leading-snug whitespace-nowrap max-md:max-w-full"
+        autoComplete="off"
       >
         <div className="flex flex-wrap gap-5 items-start w-full text-base font-semibold text-neutral-400 max-md:max-w-full">
           <div className="flex flex-col flex-1 shrink justify-center p-6 rounded-xl border border-gray-200 border-solid basis-0 bg-zinc-50 min-w-60 max-md:px-5">
             <input
-              type="email"
+              ref={emailInputRef}
+              type="text"
+              name={randomFieldNames.email}
               placeholder="아이디"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               className="bg-transparent outline-none placeholder:text-neutral-400 text-neutral-700"
+              autoComplete="nope"
+              data-form-type="other"
               required
             />
           </div>
           <div className="flex flex-1 shrink justify-between items-center px-6 py-6 rounded-xl border border-gray-200 border-solid basis-0 bg-zinc-50 min-w-60 max-md:px-5">
             <input
               type="password"
+              name={randomFieldNames.password}
               placeholder="비밀번호"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="bg-transparent outline-none placeholder:text-neutral-400 text-neutral-700 w-full"
+              autoComplete="new-password"
+              data-form-type="other"
               required
             />
           </div>

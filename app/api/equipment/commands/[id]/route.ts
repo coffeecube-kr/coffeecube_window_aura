@@ -13,6 +13,15 @@ export async function POST(
   try {
     const supabase = await createClient();
     const { id } = await params;
+    const body = await request.json();
+    const { robot_code } = body;
+
+    if (!robot_code) {
+      return NextResponse.json(
+        { error: "robot_code가 필요합니다." },
+        { status: 400 }
+      );
+    }
 
     const commandNumber = parseInt(id);
 
@@ -33,7 +42,7 @@ export async function POST(
     const { data: currentData, error: fetchError } = await supabase
       .from("equipment_status")
       .select("*")
-      .eq("robot_code", process.env.NEXT_PUBLIC_ROBOT_CODE)
+      .eq("robot_code", robot_code)
       .order("created_at", { ascending: false })
       .limit(1)
       .single();
@@ -71,7 +80,7 @@ export async function POST(
       const { data, error } = await supabase
         .from("equipment_status")
         .insert({
-          robot_code: process.env.NEXT_PUBLIC_ROBOT_CODE,
+          robot_code: robot_code,
           total_weight: 15,
           temperature: 4,
           device_status: "정상",

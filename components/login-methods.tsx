@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Modal } from "@/components/ui/modal";
+import { RobotCodeSelectorModal } from "@/components/ui/robot-code-selector-modal";
+import { toast } from "sonner";
 
 type ButtonType = "usage" | "barcode" | "login";
 
@@ -18,6 +20,8 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showRobotCodeModal, setShowRobotCodeModal] = useState(false);
+  const [pendingLogin, setPendingLogin] = useState(false);
   const router = useRouter();
   const barcodeEmailInputRef = useRef<HTMLInputElement>(null);
   const loginEmailInputRef = useRef<HTMLInputElement>(null);
@@ -35,6 +39,19 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    // robot_code 체크
+    const robotCode = localStorage.getItem("robot_code");
+    if (!robotCode) {
+      setIsLoading(false);
+      setPendingLogin(true);
+      setShowRobotCodeModal(true);
+      toast.error("장비 번호를 선택 후 로그인해주세요.", {
+        duration: 3000,
+        position: "top-center",
+      });
+      return;
+    }
 
     try {
       const response = await fetch("/api/auth/login", {
@@ -76,6 +93,61 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
       setShowErrorModal(true);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRobotCodeSelect = async (robotCode: string) => {
+    localStorage.setItem("robot_code", robotCode);
+    toast.success("장비가 선택되었습니다.", {
+      duration: 3000,
+      position: "top-center",
+    });
+
+    // 로그인 대기 중이었다면 로그인 진행
+    if (pendingLogin) {
+      setPendingLogin(false);
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            email,
+            password,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          let errorMessage = data.error || "로그인 중 오류가 발생했습니다.";
+
+          if (
+            errorMessage.toLowerCase().includes("invalid") &&
+            (errorMessage.toLowerCase().includes("credential") ||
+              errorMessage.toLowerCase().includes("login"))
+          ) {
+            errorMessage = "아이디/비밀번호가 일치하지 않습니다.";
+          }
+
+          setError(errorMessage);
+          setShowErrorModal(true);
+          return;
+        }
+
+        router.push("/client");
+      } catch (err: unknown) {
+        setError(
+          err instanceof Error ? err.message : "로그인 중 오류가 발생했습니다."
+        );
+        setShowErrorModal(true);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
   // 바코드 로그인이 선택되었을 때의 UI
@@ -143,6 +215,14 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
           confirmText="확인"
           variant="default"
         />
+        <RobotCodeSelectorModal
+          isOpen={showRobotCodeModal}
+          onClose={() => {
+            setShowRobotCodeModal(false);
+            setPendingLogin(false);
+          }}
+          onSelect={handleRobotCodeSelect}
+        />
       </div>
     );
   }
@@ -207,6 +287,14 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
           confirmText="확인"
           variant="default"
         />
+        <RobotCodeSelectorModal
+          isOpen={showRobotCodeModal}
+          onClose={() => {
+            setShowRobotCodeModal(false);
+            setPendingLogin(false);
+          }}
+          onSelect={handleRobotCodeSelect}
+        />
       </div>
     );
   }
@@ -256,6 +344,14 @@ function LoginMethods({ activeButton }: LoginMethodsProps) {
         description={error || "로그인 중 오류가 발생했습니다."}
         confirmText="확인"
         variant="destructive"
+      />
+      <RobotCodeSelectorModal
+        isOpen={showRobotCodeModal}
+        onClose={() => {
+          setShowRobotCodeModal(false);
+          setPendingLogin(false);
+        }}
+        onSelect={handleRobotCodeSelect}
       />
     </div>
   );
