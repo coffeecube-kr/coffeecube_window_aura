@@ -14,7 +14,12 @@ export interface User {
 }
 
 export type DeviceStatus = "정상" | "수거필요" | "장애발생";
-export type BucketType = "bucket1" | "bucket2" | "bucket3" | "bucket4";
+export type BucketType =
+  | "bucket1"
+  | "bucket2"
+  | "bucket3"
+  | "bucket4"
+  | "bucket5";
 
 export interface EquipmentStatusData {
   equipment_id?: string;

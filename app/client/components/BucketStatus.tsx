@@ -20,6 +20,7 @@ export default function BucketStatus({
   };
 
   const activeBucketNumber = getActiveBucketNumber();
+  const isAllBucketsFull = activeBucketNumber === 5; // bucket5면 모든 수거함이 가득 찬 상태
 
   const buckets = [
     { id: 1, weight: equipmentData?.bucket1 || 0 },
@@ -31,8 +32,9 @@ export default function BucketStatus({
   return (
     <div className="grid grid-cols-4 gap-4 w-full">
       {buckets.map((bucket) => {
-        const isActive = activeBucketNumber === bucket.id;
-        const isPrevious = bucket.id < activeBucketNumber;
+        const isActive = !isAllBucketsFull && activeBucketNumber === bucket.id;
+        const isPrevious = !isAllBucketsFull && bucket.id < activeBucketNumber;
+        const isDimmed = isAllBucketsFull || isPrevious; // bucket5이거나 이전 수거함이면 dimmed
 
         return (
           <div
@@ -40,14 +42,14 @@ export default function BucketStatus({
             className={`box-border flex flex-col gap-3 items-center px-6 py-6 rounded-xl transition-all ${
               isActive
                 ? "border-4 border-primary bg-white"
-                : isPrevious
+                : isDimmed
                 ? "border-4 border-transparent bg-gray-100 opacity-60"
                 : "border-4 border-transparent bg-white"
             }`}
           >
             <div
               className={`gap-2.5 px-4 py-1 text-xl font-bold rounded-[100px] ${
-                isPrevious
+                isDimmed
                   ? "bg-gray-300 text-gray-400"
                   : "bg-gray-200 text-zinc-500"
               }`}
@@ -64,11 +66,11 @@ export default function BucketStatus({
                     alt="weight"
                     width={28}
                     height={28}
-                    className={isPrevious ? "opacity-50" : ""}
+                    className={isDimmed ? "opacity-50" : ""}
                   />
                   <div
                     className={`text-2xl font-bold ${
-                      isPrevious ? "text-gray-400" : "text-neutral-800"
+                      isDimmed ? "text-gray-400" : "text-neutral-800"
                     }`}
                   >
                     {bucket.weight}kg

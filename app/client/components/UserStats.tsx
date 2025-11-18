@@ -18,36 +18,46 @@ export default function UserStats({ stats: initialStats }: UserStatsProps) {
   const [loading, setLoading] = useState(!initialStats);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchUserStats = async () => {
+    try {
+      setLoading(true);
+      const response = await fetch("/api/user-stats");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "사용자 통계를 불러오는데 실패했습니다.");
+      }
+
+      setStats(data);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다."
+      );
+      // 에러 시 기본값 유지
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     if (initialStats) {
       return; // 초기 데이터가 있으면 API 호출하지 않음
     }
 
-    const fetchUserStats = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch("/api/user-stats");
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.error || "사용자 통계를 불러오는데 실패했습니다."
-          );
-        }
-
-        setStats(data);
-      } catch (err) {
-        setError(
-          err instanceof Error ? err.message : "알 수 없는 오류가 발생했습니다."
-        );
-        // 에러 시 기본값 유지
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchUserStats();
   }, [initialStats]);
+
+  // 중량 업데이트 이벤트 리스너
+  useEffect(() => {
+    const handleWeightUpdate = () => {
+      fetchUserStats();
+    };
+
+    window.addEventListener("weight_updated", handleWeightUpdate);
+    return () => {
+      window.removeEventListener("weight_updated", handleWeightUpdate);
+    };
+  }, []);
 
   if (loading) {
     return (

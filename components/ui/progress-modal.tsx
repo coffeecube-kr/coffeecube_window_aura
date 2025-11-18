@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { ChevronRight } from "lucide-react";
 
 interface ProgressModalProps {
   isOpen: boolean;
@@ -11,6 +12,12 @@ interface ProgressModalProps {
   progress?: number;
   status?: string;
   robotCode?: string;
+  sendSignal?: string;
+  expectedSignal?: string;
+  receiveSignal?: string;
+  allSendSignals?: string[];
+  currentCommandIndex?: number;
+  originalCommandCount?: number; // 원래 명령어 개수 (버킷 이동 명령어 구분용)
 }
 
 const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
@@ -24,6 +31,12 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
       progress: initialProgress = 0,
       status: initialStatus = "진행중",
       robotCode = "12345678",
+      sendSignal = "",
+      expectedSignal = "",
+      receiveSignal = "",
+      allSendSignals = [],
+      currentCommandIndex = -1,
+      originalCommandCount = 0,
     },
     ref
   ) => {
@@ -39,13 +52,9 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
     React.useEffect(() => {
       if (initialProgress >= 100 && !isCompleted) {
         setIsCompleted(true);
-        // 100% 완료 시 0.5초 후 자동으로 모달 닫기
-        setTimeout(() => {
-          onComplete?.();
-          onClose();
-        }, 500);
+        onComplete?.();
       }
-    }, [initialProgress, isCompleted, onComplete, onClose]);
+    }, [initialProgress, isCompleted, onComplete]);
 
     if (!isOpen) return null;
 
@@ -56,7 +65,7 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
         <div
           ref={ref}
-          className="box-border inline-flex gap-2.5 items-center p-14 rounded-3xl bg-zinc-100 h-[697px] w-[512px] max-md:p-10 max-md:w-full max-md:h-auto max-md:max-w-[480px] max-md:min-h-[600px] max-sm:p-6 max-sm:w-full max-sm:h-auto max-sm:max-w-[360px] max-sm:min-h-[500px]"
+          className="box-border inline-flex gap-2.5 items-center p-14 rounded-3xl bg-zinc-100 h-[1000px] w-[512px] max-md:p-10 max-md:w-full max-md:h-auto max-md:max-w-[480px] max-md:min-h-[600px] max-sm:p-6 max-sm:w-full max-sm:h-auto max-sm:max-w-[360px] max-sm:min-h-[500px]"
         >
           <div className="flex relative flex-col gap-16 items-start w-[400px] max-md:gap-10 max-md:w-full max-sm:gap-8 max-sm:w-full">
             <div className="flex relative flex-col gap-3 justify-center items-center self-stretch">
@@ -276,16 +285,90 @@ const ProgressModal = React.forwardRef<HTMLDivElement, ProgressModalProps>(
               </div>
 
               <div className="flex relative flex-col gap-8 items-start self-stretch">
+                {/* 송신신호 리스트 표시 */}
+                {allSendSignals.length > 0 && (
+                  <div className="flex flex-wrap gap-2 w-full p-3 bg-gray-50 rounded-lg items-center max-h-[120px] overflow-y-auto">
+                    {allSendSignals.map((signal, index) => {
+                      // 완료된 명령: 현재 인덱스보다 작은 경우
+                      const isCompleted = index < currentCommandIndex;
+                      // 현재 진행중인 명령
+                      const isCurrent = index === currentCommandIndex;
+                      // 대기중인 명령
+                      const isPending = index > currentCommandIndex;
+                      // 버킷 이동 명령어 (원래 명령어 개수 이후에 추가된 명령)
+                      const isBucketMove = index >= originalCommandCount;
+
+                      return (
+                        <React.Fragment key={index}>
+                          <span
+                            className={`text-sm font-medium transition-colors ${
+                              isBucketMove
+                                ? isCompleted
+                                  ? "text-blue-600 font-semibold"
+                                  : isCurrent
+                                  ? "text-blue-600 font-bold"
+                                  : "text-blue-400"
+                                : isCompleted
+                                ? "text-primary font-semibold"
+                                : isCurrent
+                                ? "text-primary font-bold"
+                                : "text-gray-400"
+                            }`}
+                          >
+                            {signal}
+                          </span>
+                          {index < allSendSignals.length - 1 && (
+                            <ChevronRight
+                              className={`w-4 h-4 transition-colors ${
+                                isCompleted ? "text-green-400" : "text-gray-400"
+                              }`}
+                            />
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* 송신신호, 예상신호, 수신신호 표시 - 항상 표시 */}
+                <div className="flex flex-col gap-3 w-full p-4 bg-white rounded-lg">
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs font-semibold text-neutral-500">
+                      송신신호
+                    </div>
+                    <div className="text-sm font-medium text-neutral-800 break-all">
+                      {sendSignal || "-"}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs font-semibold text-neutral-500">
+                      예상신호
+                    </div>
+                    <div className="text-sm font-medium text-neutral-800 break-all">
+                      {expectedSignal || "-"}
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <div className="text-xs font-semibold text-neutral-500">
+                      수신신호
+                    </div>
+                    <div className="text-sm font-medium text-neutral-800 break-all">
+                      {receiveSignal || "-"}
+                    </div>
+                  </div>
+                </div>
+
                 <button
                   onClick={onClose}
-                  className={`flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl cursor-pointer transition-colors max-sm:p-5 ${
+                  disabled={!isCompleted}
+                  className={`flex relative flex-col gap-2.5 justify-center items-center self-stretch p-6 rounded-xl transition-colors max-sm:p-5 ${
                     isCompleted
-                      ? "bg-primary hover:bg-primary/90"
-                      : "bg-rose-600 hover:bg-rose-700"
+                      ? "bg-primary hover:bg-primary/90 cursor-pointer"
+                      : "bg-gray-400 cursor-not-allowed opacity-50"
                   }`}
                 >
                   <div className="relative text-xl font-black leading-7 text-center text-white max-sm:text-lg">
-                    {isCompleted ? "작업 완료" : "취소하기"}
+                    {isCompleted ? "확인" : "진행중..."}
                   </div>
                 </button>
               </div>

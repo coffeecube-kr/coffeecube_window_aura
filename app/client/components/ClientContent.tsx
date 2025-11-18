@@ -149,6 +149,18 @@ export default function ClientContent({ user }: ClientContentProps) {
     initializeData();
   }, [fetchUserInfo, fetchEquipmentStatus, isInitialized, robotCode]);
 
+  // 중량 업데이트 이벤트 리스너
+  useEffect(() => {
+    const handleWeightUpdate = () => {
+      fetchEquipmentStatus();
+    };
+
+    window.addEventListener("weight_updated", handleWeightUpdate);
+    return () => {
+      window.removeEventListener("weight_updated", handleWeightUpdate);
+    };
+  }, [fetchEquipmentStatus]);
+
   // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
   useEffect(() => {
     const saveInitialData = async () => {

@@ -318,7 +318,44 @@ export async function GET(request: NextRequest) {
     const start_date = searchParams.get("start_date");
     const end_date = searchParams.get("end_date");
     const limit = parseInt(searchParams.get("limit") || "20");
+    const checkDaily = searchParams.get("check_daily"); // 일일 한도 체크용
 
+    // 일일 한도 체크 요청인 경우
+    if (checkDaily === "true") {
+      const today = new Date().toISOString().split("T")[0];
+      const { data: todayRecords, error: queryError } = await supabase
+        .from("input_records")
+        .select("input_amount")
+        .eq("user_id", user.id)
+        .eq("input_date", today);
+
+      if (queryError) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "오늘 투입량 조회에 실패했습니다.",
+            message: queryError.message || "데이터베이스 조회 오류",
+          },
+          { status: 500 }
+        );
+      }
+
+      const todayTotalKg = todayRecords.reduce(
+        (sum, record) => sum + Number(record.input_amount),
+        0
+      );
+
+      return NextResponse.json({
+        success: true,
+        data: {
+          todayTotal: todayTotalKg,
+          maxDaily: 2,
+          isLimitReached: todayTotalKg >= 2,
+        },
+      });
+    }
+
+    // 일반 기록 조회
     let query = supabase
       .from("input_records")
       .select("*")
