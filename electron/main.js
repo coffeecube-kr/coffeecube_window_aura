@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require("electron");
+const { app, BrowserWindow, session } = require("electron");
 const path = require("path");
 const { spawn } = require("child_process");
 
@@ -30,9 +30,11 @@ function createWindow() {
     y: 0,
     webPreferences: {
       nodeIntegration: false,
-      contextIsolation: true,
-      preload: path.join(__dirname, "preload.js"),
+      contextIsolation: false, // 브라우저와 동일한 컨텍스트
+      sandbox: true, // 브라우저와 동일한 보안 모델
       zoomFactor: 1.0,
+      // Web Serial API 활성화
+      enableBlinkFeatures: "Serial",
     },
     icon: path.join(__dirname, "../public/favicon.ico"),
     // 키오스크 모드 설정
@@ -46,10 +48,7 @@ function createWindow() {
     fullscreenable: true, // 전체 화면 가능하도록 설정
   });
 
-  // 모바일 viewport 시뮬레이션 설정
-  mainWindow.webContents.setUserAgent(
-    "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/90.0.4430.91 Mobile Safari/537.36"
-  );
+  // User Agent는 Electron 기본값 사용 (데스크톱 Chrome)
 
   // 개발자 도구 열기 (프로덕션에서도 F12로 열 수 있도록)
   if (isDev) {
@@ -209,7 +208,7 @@ function startNextServer() {
     // .env.local 파일 로드
     const envPath = path.join(appPath, ".env.local");
     let envVars = { ...process.env };
-    
+
     if (fs.existsSync(envPath)) {
       console.log("✓ Loading .env.local from:", envPath);
       const envContent = fs.readFileSync(envPath, "utf8");
@@ -286,7 +285,7 @@ function startNextServer() {
       console.error("✗ Next.js server failed to start");
       resolve(); // 타임아웃되어도 계속 진행
     };
-    
+
     checkServer();
   });
 }
@@ -298,19 +297,30 @@ if (!gotTheLock) {
   console.log("Another instance is already running. Quitting...");
   app.quit();
 } else {
-  app.on('second-instance', () => {
+  app.on("second-instance", () => {
     // 두 번째 인스턴스가 실행되려고 하면 기존 창을 포커스
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
+
+app.whenReady().then(async () => {
+  // Serial API 권한 설정
+  session.defaultSession.setPermissionCheckHandler(
+    (webContents, permission) => {
+      console.log(`Permission check: ${permission}`);
+      if (permission === 'serial') {
+        return true;
+      }
+      return false;
     }
-  });
+  );
 
-  app.whenReady().then(async () => {
-    // Next.js 서버 먼저 시작
-    await startNextServer();
-
-    // Electron 창 생성
+  session.defaultSession.setDevicePermissionHandler((details) => {
+    console.log(`Device permission: ${details.deviceType}`);
+    if (details.deviceType === 'serial') {
+      return true;
+    }
+    return false;
     createWindow();
   });
 }
