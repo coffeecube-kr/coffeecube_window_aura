@@ -301,14 +301,14 @@ async def send_command(request: CommandRequest):
                                     response_bytes = buffer[start_idx:end_idx+1]
                                     response = response_bytes.decode('utf-8', errors='ignore').strip()
                                     
-                                    # if response:
-                                    #     # ===== 테스트용 (IWRP) 응답 변환 =====
-                                    #     # 실제 운영 시 아래 2줄을 주석 처리하세요 (HIDE)
-                                    #     if response == "(0000)":
-                                    #         response = "(1500)"
-                                    #     # ===== 테스트용 변환 끝 =====
+                                    if response:
+                                        # ===== 테스트용 (IWRP) 응답 변환 =====
+                                        # 실제 운영 시 아래 2줄을 주석 처리하세요 (HIDE)
+                                        # if response == "(0000)":
+                                        #     response = "(1500)"
+                                        # ===== 테스트용 변환 끝 =====
                                         
-                                    #     responses.append(response)
+                                        responses.append(response)
                                     
                                     # 처리한 부분 제거
                                     buffer = buffer[end_idx+1:]

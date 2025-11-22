@@ -88,7 +88,7 @@ function startPythonServer() {
       for (let i = 0; i < 30; i++) {
         try {
           await new Promise((resolveCheck, rejectCheck) => {
-            const req = http.get("http://localhost:8000", (res) => {
+            const req = http.get(`${API_BASE_URL}`, (res) => {
               resolveCheck();
             });
             req.on("error", rejectCheck);
