@@ -65,9 +65,23 @@ export const useSerialPort = (): SerialPortHook => {
         dataBits: 8,
         stopBits: 1,
         parity: "none",
+        flowControl: "none",
       });
 
       portRef.current = port;
+
+      // DTR/RTS 신호 명시적으로 설정 (디바이스 리셋 방지)
+      try {
+        await (port as any).setSignals({
+          dataTerminalReady: false,
+          requestToSend: false,
+        });
+      } catch (err) {
+        // setSignals를 지원하지 않는 브라우저는 무시
+        if (globalTestConfig.debugMode) {
+          console.log("[DTR/RTS 설정 실패 - 지원하지 않는 브라우저]");
+        }
+      }
 
       // 포트 안정화 대기
       await new Promise((resolve) => setTimeout(resolve, 500));
