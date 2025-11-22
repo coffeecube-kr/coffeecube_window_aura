@@ -96,6 +96,57 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
     }
   }, []);
 
+  const handleIWRPResponse = useCallback(async (response: string) => {
+    try {
+      // (xxxx) 형식에서 숫자 추출
+      const match = response.match(/\((\d+)\)/);
+      if (!match || !match[1]) {
+        return;
+      }
+
+      const weightGrams = parseInt(match[1], 10);
+      if (isNaN(weightGrams) || weightGrams <= 0) {
+        return;
+      }
+
+      // robot_code 가져오기
+      const robotCode = localStorage.getItem("robot_code");
+      if (!robotCode) {
+        return;
+      }
+
+      // API 호출하여 중량 업데이트
+      const apiResponse = await fetch("/api/equipment/update-weight", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          robot_code: robotCode,
+          weight_grams: weightGrams,
+        }),
+      });
+
+      if (!apiResponse.ok) {
+        const errorData = await apiResponse.json();
+        setError(
+          `중량 업데이트 실패\n${errorData.message || "알 수 없는 오류"}`
+        );
+      } else {
+        // 성공 시 화면 업데이트를 위한 이벤트 발생
+        const updateEvent = new CustomEvent("weight_updated", {
+          detail: { weightGrams, robotCode },
+        });
+        window.dispatchEvent(updateEvent);
+      }
+    } catch (error) {
+      // 에러가 발생해도 시리얼 통신은 계속 진행
+      if (globalTestConfig.debugMode) {
+        console.error("IWRP 응답 처리 중 오류:", error);
+      }
+    }
+  }, []);
+
   const sendCommand = useCallback(
     async (command: string): Promise<boolean> => {
       try {
@@ -214,7 +265,26 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
             onProgress(i, commands.length, "receive", result.received_data);
           }
 
-          if (command.receive && command.receive.trim() !== "") {
+          // IWRP 신호인 경우 중량 데이터 처리
+          if (command.send === "IWRP" || command.send === "(IWRP)") {
+            if (globalTestConfig.debugMode) {
+              console.log(`[IWRP 응답 수신] ${result.received_data}`);
+            }
+
+            if (result.success && result.received_data) {
+              // 중량 데이터 처리
+              await handleIWRPResponse(result.received_data);
+            }
+
+            if (!result.success) {
+              setError(
+                `[${i + 1}/${
+                  commands.length
+                }] IWRP 응답 수신 실패\n응답 대기 시간 초과`
+              );
+              return false;
+            }
+          } else if (command.receive && command.receive.trim() !== "") {
             if (!result.success) {
               setError(
                 `[${i + 1}/${commands.length}] 응답 수신 실패\n기대 응답: ${
@@ -249,7 +319,7 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
         return false;
       }
     },
-    [isConnected, connect]
+    [isConnected, connect, handleIWRPResponse]
   );
 
   return {
