@@ -1,12 +1,71 @@
 const { app, BrowserWindow, session } = require("electron");
 const path = require("path");
+const { spawn } = require("child_process");
 
 const isDev = process.env.NODE_ENV === "development";
 let mainWindow;
+let pythonProcess = null;
 
 // 배포된 웹 URL (개발/프로덕션 모드에 따라 다른 URL 사용 가능)
 const PRODUCTION_URL = "https://coffeecube-window-omega.vercel.app/";
 const DEV_URL = "http://localhost:3000";
+
+// Python 서버 시작 함수
+function startPythonServer() {
+  return new Promise((resolve, reject) => {
+    const serverPath = path.join(__dirname, "../server/main.py");
+    const pythonExecutable = isDev
+      ? "python"
+      : path.join(process.resourcesPath, "python", "python.exe");
+
+    console.log("Starting Python server...");
+    console.log("Python executable:", pythonExecutable);
+    console.log("Server path:", serverPath);
+
+    // Python 서버 실행
+    pythonProcess = spawn(pythonExecutable, [serverPath]);
+
+    pythonProcess.stdout.on("data", (data) => {
+      console.log(`[Python Server] ${data.toString()}`);
+
+      // 서버가 시작되었는지 확인
+      if (data.toString().includes("Uvicorn running")) {
+        console.log("Python server started successfully");
+        resolve();
+      }
+    });
+
+    pythonProcess.stderr.on("data", (data) => {
+      console.error(`[Python Server Error] ${data.toString()}`);
+    });
+
+    pythonProcess.on("close", (code) => {
+      console.log(`Python server exited with code ${code}`);
+      pythonProcess = null;
+    });
+
+    pythonProcess.on("error", (err) => {
+      console.error("Failed to start Python server:", err);
+      reject(err);
+    });
+
+    // 2초 후에도 에러가 없으면 성공으로 간주
+    setTimeout(() => {
+      if (pythonProcess) {
+        resolve();
+      }
+    }, 2000);
+  });
+}
+
+// Python 서버 종료 함수
+function stopPythonServer() {
+  if (pythonProcess) {
+    console.log("Stopping Python server...");
+    pythonProcess.kill();
+    pythonProcess = null;
+  }
+}
 
 function createWindow() {
   // 이미 창이 존재하면 생성하지 않음
@@ -168,8 +227,19 @@ app.whenReady().then(() => {
     }
   );
 
-  // 바로 창 생성 (서버 시작 불필요)
-  createWindow();
+  // Python 서버 시작 후 창 생성
+  startPythonServer()
+    .then(() => {
+      console.log("Python server is ready, creating window...");
+      createWindow();
+    })
+    .catch((err) => {
+      console.error(
+        "Failed to start Python server, but creating window anyway:",
+        err
+      );
+      createWindow();
+    });
 });
 
 app.on("activate", () => {
@@ -179,7 +249,15 @@ app.on("activate", () => {
 });
 
 app.on("window-all-closed", () => {
+  // Python 서버 종료
+  stopPythonServer();
+
   if (process.platform !== "darwin") {
     app.quit();
   }
+});
+
+app.on("before-quit", () => {
+  // 앱 종료 전 Python 서버 종료
+  stopPythonServer();
 });

@@ -1,4 +1,4 @@
-import { useSerialPort } from "./useSerialPort";
+import { usePythonSerialPort } from "./usePythonSerialPort";
 import { useTestMode } from "./useTestMode";
 
 interface CommandSequence {
@@ -33,12 +33,12 @@ interface ActionModeHook {
 export const useActionMode = (): ActionModeHook => {
   const mode = process.env.NEXT_PUBLIC_ACTION_MODE || "TEST";
 
-  const serialPort = useSerialPort();
+  const pythonSerialPort = usePythonSerialPort();
   const testMode = useTestMode();
 
   // 환경변수에 따라 적절한 훅 반환
   if (mode === "REAL") {
-    return serialPort;
+    return pythonSerialPort;
   } else {
     return testMode;
   }
