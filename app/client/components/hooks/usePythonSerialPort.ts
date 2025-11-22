@@ -323,6 +323,31 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
               );
               return false;
             }
+
+            // 예상 신호와 실제 수신 신호 비교
+            const expectedSignal = command.receive?.trim() || "";
+            const receivedSignal = result.received_data?.trim() || "";
+
+            // 예상 신호가 있는 경우 일치 여부 확인
+            if (expectedSignal && expectedSignal !== "-") {
+              // 괄호 포함 여부에 관계없이 비교 (예: DSCN과 (DSCN) 모두 허용)
+              const normalizedExpected = expectedSignal
+                .replace(/[()]/g, "")
+                .trim();
+              const normalizedReceived = receivedSignal
+                .replace(/[()]/g, "")
+                .trim();
+
+              if (normalizedExpected !== normalizedReceived) {
+                setError(
+                  `[${i + 1}/${
+                    commands.length
+                  }] 응답 불일치\n기대 응답: ${expectedSignal}\n실제 수신: ${receivedSignal}`
+                );
+                return false;
+              }
+            }
+
             // 예상 신호를 받았으므로 duration 대기 없이 바로 다음 단계로
             continue;
           }
