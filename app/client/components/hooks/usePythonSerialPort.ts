@@ -270,7 +270,7 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
             },
             body: JSON.stringify({
               command: command.send,
-              timeout: hasExpectedResponse ? command.duration : 0.1, // 예상 신호 없으면 0.1초만 대기
+              timeout: hasExpectedResponse ? 3.0 : 0.1, // 응답 대기: 3초, 응답 없음: 0.1초
               max_retries: hasExpectedResponse ? 3 : 0, // 예상 신호 없으면 재시도 안함
             }),
             signal: abortControllerRef.current?.signal,
@@ -291,11 +291,21 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
 
           // 예상 신호가 없으면 응답 검증 없이 바로 다음으로
           if (!hasExpectedResponse) {
-            // duration이 있으면 해당 시간만큼 대기
+            // duration만큼 대기 후 다음 단계로
             if (command.duration && command.duration > 0) {
+              if (globalTestConfig.debugMode) {
+                console.log(
+                  `[응답 없음] ${command.send} - ${command.duration}ms 대기 시작`
+                );
+              }
               await new Promise((resolve) =>
                 setTimeout(resolve, command.duration)
               );
+              if (globalTestConfig.debugMode) {
+                console.log(
+                  `[응답 없음] ${command.send} - ${command.duration}ms 대기 완료`
+                );
+              }
             }
             continue;
           }

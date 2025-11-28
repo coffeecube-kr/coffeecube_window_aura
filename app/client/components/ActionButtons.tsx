@@ -167,11 +167,11 @@ export default function ActionButtons() {
         return;
       }
 
-      // 명령 시퀀스 준비
+      // 명령 시퀀스 준비 (duration을 초 단위에서 밀리초로 변환)
       const commandSequence = button.commands.map((cmd) => ({
         send: cmd.send,
         receive: cmd.receive,
-        duration: cmd.duration,
+        duration: cmd.duration * 1000, // 초를 밀리초로 변환
       }));
 
       // 전체 송신신호 리스트 설정
