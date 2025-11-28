@@ -323,6 +323,24 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
 
               result = await response.json();
 
+              // success가 false이면 재시도 필요
+              if (result && !result.success) {
+                lastError = result.error || "응답 수신 실패";
+
+                if (globalTestConfig.debugMode) {
+                  console.log(`[응답 실패] ${lastError}`);
+                }
+
+                // 마지막 재시도가 아니면 1초 대기 후 재시도
+                if (retryCount < maxFrontendRetries - 1) {
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                  continue;
+                }
+
+                // 마지막 재시도도 실패하면 에러 처리는 아래에서
+                break;
+              }
+
               // 성공적으로 응답을 받았으면 재시도 루프 종료
               break;
             } catch (err) {
