@@ -4,6 +4,7 @@ import withPWA from "next-pwa";
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  turbopack: {}, // Next.js 16 Turbopack 기본 사용 (webpack 충돌 방지)
 };
 
 export default withPWA({
