@@ -415,7 +415,12 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
               );
               return false;
             }
-            // 예상 신호를 받았으므로 duration 대기 없이 바로 다음 단계로
+            // 예상 신호를 받았으므로 duration 대기 없이 즉시 다음 단계로
+            if (globalTestConfig.debugMode) {
+              console.log(
+                `[IWRP 완료] ${command.send} → ${result.received_data} - 즉시 다음 단계로`
+              );
+            }
             continue;
           } else {
             // 일반 명령의 경우 응답 검증
@@ -452,7 +457,12 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
               }
             }
 
-            // 예상 신호를 받았으므로 duration 대기 없이 바로 다음 단계로
+            // 예상 신호를 받았으므로 duration 대기 없이 즉시 다음 단계로
+            if (globalTestConfig.debugMode) {
+              console.log(
+                `[응답 수신 완료] ${command.send} → ${result.received_data} - 즉시 다음 단계로`
+              );
+            }
             continue;
           }
         }
