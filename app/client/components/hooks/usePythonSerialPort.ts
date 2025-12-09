@@ -271,7 +271,8 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
           let lastError: string | null = null;
 
           // (ILXX) 형태의 명령어는 1번만 시도, 나머지는 3번 재시도
-          const isILCommand = /^\(IL\d{2}\)$/.test(command.send.trim());
+          // IL로 시작하는 모든 명령어 (ILBS, ILDP, IL01 등) 포함
+          const isILCommand = /^\(?IL[A-Z0-9]+\)?$/i.test(command.send.trim());
           const maxFrontendRetries = isILCommand ? 1 : 3;
 
           for (
