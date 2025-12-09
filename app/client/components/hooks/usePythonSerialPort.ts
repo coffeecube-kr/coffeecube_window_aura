@@ -269,7 +269,10 @@ export const usePythonSerialPort = (): PythonSerialPortHook => {
             error?: string;
           } | null = null;
           let lastError: string | null = null;
-          const maxFrontendRetries = 3; // 프론트엔드에서 최대 3번 재시도
+
+          // (ILXX) 형태의 명령어는 1번만 시도, 나머지는 3번 재시도
+          const isILCommand = /^\(IL\d{2}\)$/.test(command.send.trim());
+          const maxFrontendRetries = isILCommand ? 1 : 3;
 
           for (
             let retryCount = 0;

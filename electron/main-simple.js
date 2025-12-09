@@ -10,6 +10,9 @@ let pythonProcess = null;
 const PRODUCTION_URL = "https://coffeecube-window-omega.vercel.app/";
 const DEV_URL = "http://localhost:3000";
 
+// Python 서버 URL
+const API_BASE_URL = "http://127.0.0.1:8000";
+
 // Python 서버 시작 함수
 function startPythonServer() {
   return new Promise((resolve, reject) => {
