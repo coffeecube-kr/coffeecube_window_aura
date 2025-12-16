@@ -1,6 +1,6 @@
 const { app, BrowserWindow, session } = require("electron");
 const path = require("path");
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 
 const isDev = process.env.NODE_ENV === "development";
 let mainWindow;
@@ -13,14 +13,91 @@ const DEV_URL = "http://localhost:3000";
 // Python 서버 URL
 const API_BASE_URL = "http://127.0.0.1:8000";
 
+// 8000번 포트 사용 중인 프로세스 강제 종료 함수
+function killPort8000Processes() {
+  return new Promise((resolve) => {
+    if (isDev) {
+      // 개발 모드에서는 포트 종료하지 않음
+      resolve();
+      return;
+    }
+
+    console.log("Checking for processes using port 8000...");
+
+    // Windows에서 8000번 포트 사용 중인 프로세스 찾기 및 종료
+    exec("netstat -ano | findstr :8000", (error, stdout, stderr) => {
+      if (stdout) {
+        const lines = stdout.trim().split("\n");
+        const pids = new Set();
+
+        lines.forEach((line) => {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 5) {
+            const pid = parts[parts.length - 1];
+            if (pid && pid !== "PID" && !isNaN(pid)) {
+              pids.add(pid);
+            }
+          }
+        });
+
+        if (pids.size > 0) {
+          console.log(
+            `Found processes using port 8000: ${Array.from(pids).join(", ")}`
+          );
+
+          // 찾은 PID들 강제 종료
+          const killPromises = Array.from(pids).map((pid) => {
+            return new Promise((killResolve) => {
+              exec(
+                `taskkill /F /PID ${pid}`,
+                (killError, killStdout, killStderr) => {
+                  if (killError) {
+                    console.log(
+                      `Failed to kill PID ${pid}: ${killError.message}`
+                    );
+                  } else {
+                    console.log(`Successfully killed PID ${pid}`);
+                  }
+                  killResolve();
+                }
+              );
+            });
+          });
+
+          Promise.all(killPromises).then(() => {
+            // 포트가 정리될 때까지 잠시 대기
+            setTimeout(() => {
+              console.log("Port 8000 cleanup completed");
+              resolve();
+            }, 1000);
+          });
+        } else {
+          console.log("No processes found using port 8000");
+          resolve();
+        }
+      } else {
+        console.log("No processes found using port 8000");
+        resolve();
+      }
+    });
+  });
+}
+
 // Python 서버 시작 함수
 function startPythonServer() {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     if (isDev) {
       // 개발 모드에서는 수동으로 실행한 서버 사용
       console.log("Development mode: Using manually started Python server");
       resolve();
       return;
+    }
+
+    // 8000번 포트 사용 중인 프로세스 강제 종료
+    try {
+      await killPort8000Processes();
+    } catch (error) {
+      console.error("Error killing port 8000 processes:", error);
     }
 
     // 프로덕션 모드에서 Python 서버 시작

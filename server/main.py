@@ -226,8 +226,14 @@ async def send_command(request: CommandRequest):
     try:
         all_responses = []
         
+        # (ILXX) 형태의 명령어는 1번만 시도, 나머지는 기본값 사용
+        # IL로 시작하는 모든 명령어 (ILBS, ILDP, IL01 등) 포함
+        import re
+        is_il_command = bool(re.match(r'^\(?IL[A-Z0-9]+\)?$', request.command.strip(), re.IGNORECASE))
+        max_retries = 1 if is_il_command else request.max_retries
+        
         # 재시도 루프
-        for attempt in range(request.max_retries):
+        for attempt in range(max_retries):
             # 각 재시도마다 취소 플래그 체크
             if is_cancelled:
                 return CommandResponse(
@@ -353,7 +359,7 @@ async def send_command(request: CommandRequest):
             success=False,
             received_data="(응답 없음)",
             responses=all_responses,
-            error=f"응답 수신 실패 (총 {request.max_retries}회 시도)"
+            error=f"응답 수신 실패 (총 {max_retries}회 시도)"
         )
     
     except Exception as e:
