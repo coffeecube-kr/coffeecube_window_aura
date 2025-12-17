@@ -83,7 +83,7 @@ export async function POST(
           robot_code: robot_code,
           total_weight: 15,
           temperature: 99, // 기본값 99 (serial 통신 실패 시)
-          device_status: "장애발생", // 기본값 장애발생 (serial 통신 실패 시)
+          device_status: "정상", // 기본값 정상
           action_name: actionName,
           action_response: actionResponse,
         })

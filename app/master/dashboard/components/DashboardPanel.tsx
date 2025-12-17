@@ -192,11 +192,10 @@ export default function DashboardPanel() {
       const data = await response.json();
 
       if (response.ok) {
-        // API에서 받은 온도와 장비 상태를 무시하고 초기화 (serial 통신으로만 설정)
+        // API에서 받은 온도만 초기화 (장비 상태는 시리얼 통신으로 설정)
         setEquipmentData({
           ...data,
           temperature: 99,
-          device_status: "장애발생",
         });
       }
     } catch {

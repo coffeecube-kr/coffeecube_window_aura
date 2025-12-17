@@ -6,8 +6,8 @@ function generateMockEquipmentData(robotCode: string) {
   return {
     robot_code: robotCode,
     total_weight: Number((Math.random() * 30 + 5).toFixed(2)), // 5kg ~ 35kg
-    temperature: 99, // 항상 99 (클라이언트에서 serial 통신으로 덮어씀)
-    device_status: "장애발생" as const, // 항상 장애발생 (클라이언트에서 serial 통신으로 덮어씀)
+    temperature: Number((Math.random() * 30 + 20).toFixed(1)), // 20°C ~ 50°C (정상 운영 온도)
+    device_status: "정상" as const, // 정상 상태
     action_name: null as string | null,
     action_response: null as string | null,
   };

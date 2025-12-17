@@ -247,27 +247,32 @@ async def send_command(request: CommandRequest):
                 time.sleep(1.0)  # 1초 대기
             
             # 버퍼 비우기 (기존 데이터 제거) - 여러 번 반복
+            # IL 명령어는 빠른 응답이 필요하므로 딜레이 최소화
+            buffer_clear_delay = 0.01 if is_il_command else 0.05
             for _ in range(2):
                 serial_port.reset_input_buffer()
                 serial_port.reset_output_buffer()
-                time.sleep(0.05)
+                time.sleep(buffer_clear_delay)
             
             # 버퍼에 남은 데이터 완전히 제거
             retry_count = 0
             while serial_port.in_waiting > 0 and retry_count < 10:
                 serial_port.read(serial_port.in_waiting)
-                time.sleep(0.05)
+                time.sleep(buffer_clear_delay)
                 retry_count += 1
             
-            time.sleep(0.15)
+            # IL 명령어는 즉시 전송, 나머지는 안정화 대기
+            if not is_il_command:
+                time.sleep(0.15)
             
             # 명령 전송
             command_bytes = f"{request.command}\r\n".encode('utf-8')
             serial_port.write(command_bytes)
             serial_port.flush()
             
-            # 디바이스 처리 시간 대기
-            time.sleep(0.3)
+            # 디바이스 처리 시간 대기 - IL 명령어는 빠른 응답 필요
+            device_delay = 0.1 if is_il_command else 0.3
+            time.sleep(device_delay)
             
             # 응답 수신 (최대 timeout초)
             start_time = time.time()
@@ -295,8 +300,9 @@ async def send_command(request: CommandRequest):
                             last_data_time = time.time()
                             received_any_data = True
                             
-                            # GUI 업데이트를 위한 짧은 대기
-                            time.sleep(0.01)
+                            # GUI 업데이트를 위한 짧은 대기 - IL 명령어는 더 빠름
+                            gui_delay = 0.005 if is_il_command else 0.01
+                            time.sleep(gui_delay)
                             
                             # 괄호로 묶인 응답 추출 (IDON) 형식
                             while b'(' in buffer and b')' in buffer:
@@ -323,10 +329,12 @@ async def send_command(request: CommandRequest):
                     
                     # 데이터가 없으면 대기 (취소 즉시 반응을 위해 짧은 주기)
                     else:
-                        time.sleep(0.01)  # 취소 즉시 반응을 위해 10ms로 단축
+                        wait_delay = 0.005 if is_il_command else 0.01
+                        time.sleep(wait_delay)
                         
-                        # 응답을 받았고 0.5초간 추가 데이터가 없으면 즉시 종료
-                        if responses and (time.time() - last_data_time) > 0.5:
+                        # 응답을 받았고 IL 명령어는 0.2초, 나머지는 0.5초간 추가 데이터가 없으면 즉시 종료
+                        timeout_check = 0.2 if is_il_command else 0.5
+                        if responses and (time.time() - last_data_time) > timeout_check:
                             break
                 
                 except Exception as e:

@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       user: authData.user,
+      session: authData.session,
       message: "로그인에 성공했습니다.",
     });
   } catch {

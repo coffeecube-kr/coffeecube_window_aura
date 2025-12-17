@@ -33,12 +33,29 @@ export function LoginForm({
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
       });
-      if (error) throw error;
-      // Update this route to redirect to an authenticated route. The user already has an active session.
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "로그인에 실패했습니다.");
+      }
+
+      // 서버에서 받은 세션 정보로 클라이언트 세션 설정
+      if (data.session) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        });
+      }
+
+      // 로그인 성공 후 페이지 이동
       router.push("/protected");
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");

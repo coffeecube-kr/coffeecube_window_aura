@@ -52,7 +52,114 @@ export default function ClientContent({ user }: ClientContentProps) {
     router.push("/master");
   };
 
-  // 사용자 인증 정보 가져오기
+  // 특정 device_status로 장비 상태 저장
+  const saveEquipmentStatusWithDeviceStatus = useCallback(
+    async (
+      deviceStatus: string,
+      equipmentData: EquipmentStatusData,
+      userId: string
+    ) => {
+      try {
+        if (!equipmentData || !robotCode || !userId) {
+          return;
+        }
+
+        const saveData = {
+          robot_code: robotCode,
+          total_weight: equipmentData.total_weight,
+          temperature: equipmentData.temperature,
+          device_status: deviceStatus,
+          action_name: equipmentData.action_name || null,
+          action_response: equipmentData.action_response || null,
+          user_id: userId,
+        };
+
+        const response = await fetch("/api/equipment/status/save", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(saveData),
+        });
+
+        if (!response.ok && process.env.NODE_ENV === "development") {
+          console.log("Device Status Save Error:", await response.json());
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.log("Device Status Save Network Error:", error);
+        }
+      }
+    },
+    [robotCode]
+  );
+
+  // RST0 전송 및 RST1 응답 확인 함수
+  const checkDeviceStatusWithRST = useCallback(
+    async (
+      currentEquipmentData: EquipmentStatusData,
+      currentUserId: string
+    ) => {
+      try {
+        if (!robotCode) return;
+
+        // Python 서버에 RST0 명령 전송
+        const rstResponse = await fetch("http://localhost:8000/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            command: "(RST0)",
+            timeout: 3.0,
+            max_retries: 1,
+          }),
+        });
+
+        if (!rstResponse.ok) {
+          // Python 서버 연결 실패 시 장애 상태로 저장
+          console.log("Python 서버 연결 실패 - 장애발생 상태로 저장");
+          await saveEquipmentStatusWithDeviceStatus(
+            "장애발생",
+            currentEquipmentData,
+            currentUserId
+          );
+          return;
+        }
+
+        const rstResult = await rstResponse.json();
+
+        // RST1 응답 확인
+        if (rstResult.success && rstResult.responses.includes("(RST1)")) {
+          // RST1 수신 성공 - 정상 상태로 저장
+          console.log("RST1 응답 수신 - 장비 정상");
+          await saveEquipmentStatusWithDeviceStatus(
+            "정상",
+            currentEquipmentData,
+            currentUserId
+          );
+        } else {
+          // RST1 미수신 - 장애 상태로 저장
+          console.log("RST1 응답 없음 - 장애발생 상태로 저장");
+          await saveEquipmentStatusWithDeviceStatus(
+            "장애발생",
+            currentEquipmentData,
+            currentUserId
+          );
+        }
+      } catch (error) {
+        // 에러 발생 시 장애 상태로 저장
+        console.log("RST0/RST1 체크 오류 - 장애발생 상태로 저장:", error);
+        await saveEquipmentStatusWithDeviceStatus(
+          "장애발생",
+          currentEquipmentData,
+          currentUserId
+        );
+      }
+    },
+    [robotCode, saveEquipmentStatusWithDeviceStatus]
+  );
+
   const fetchUserInfo = useCallback(async () => {
     try {
       const supabase = createClient();
@@ -63,12 +170,15 @@ export default function ClientContent({ user }: ClientContentProps) {
 
       if (!error && user) {
         setUserId(user.id);
+        return user.id;
       }
+      return null;
     } catch (error) {
       // 개발 환경에서만 에러 로깅
       if (process.env.NODE_ENV === "development") {
         console.log("User fetch error:", error);
       }
+      return null;
     }
   }, []);
 
@@ -119,7 +229,7 @@ export default function ClientContent({ user }: ClientContentProps) {
   // API에서 장비 상태 데이터 가져오기
   const fetchEquipmentStatus = useCallback(async () => {
     try {
-      if (!robotCode) return;
+      if (!robotCode) return null;
 
       const response = await fetch(
         `/api/equipment/status?robot_code=${robotCode}`
@@ -128,9 +238,12 @@ export default function ClientContent({ user }: ClientContentProps) {
 
       if (response.ok) {
         setEquipmentData(data);
+        return data;
       }
+      return null;
     } catch {
       // 에러 발생 시 기본값 유지
+      return null;
     }
   }, [robotCode]);
 
@@ -139,15 +252,26 @@ export default function ClientContent({ user }: ClientContentProps) {
     const initializeData = async () => {
       if (!isInitialized && robotCode) {
         // 사용자 정보와 장비 상태 데이터를 순서대로 가져오기
-        await fetchUserInfo();
-        await fetchEquipmentStatus();
+        const fetchedUserId = await fetchUserInfo();
+        const fetchedEquipmentData = await fetchEquipmentStatus();
+
+        // 장비 상태 체크 (RST0 전송 및 RST1 응답 확인)
+        if (fetchedEquipmentData && fetchedUserId) {
+          await checkDeviceStatusWithRST(fetchedEquipmentData, fetchedUserId);
+        }
 
         setIsInitialized(true);
       }
     };
 
     initializeData();
-  }, [fetchUserInfo, fetchEquipmentStatus, isInitialized, robotCode]);
+  }, [
+    fetchUserInfo,
+    fetchEquipmentStatus,
+    checkDeviceStatusWithRST,
+    isInitialized,
+    robotCode,
+  ]);
 
   // 중량 업데이트 이벤트 리스너
   useEffect(() => {
@@ -160,23 +284,6 @@ export default function ClientContent({ user }: ClientContentProps) {
       window.removeEventListener("weight_updated", handleWeightUpdate);
     };
   }, [fetchEquipmentStatus]);
-
-  // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
-  useEffect(() => {
-    const saveInitialData = async () => {
-      if (
-        isInitialized &&
-        equipmentData &&
-        userId &&
-        !hasSavedInitialData.current
-      ) {
-        await saveEquipmentStatus();
-        hasSavedInitialData.current = true;
-      }
-    };
-
-    saveInitialData();
-  }, [isInitialized, equipmentData, userId, saveEquipmentStatus]);
 
   return (
     <div className="relative flex flex-col items-center justify-start h-screen">
