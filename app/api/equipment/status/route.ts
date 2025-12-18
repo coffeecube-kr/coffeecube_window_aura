@@ -49,9 +49,31 @@ export async function GET(request: NextRequest) {
     const mockData = statusData || generateMockEquipmentData(robotCode);
 
     // bucket 데이터와 함께 응답
+    // bucket_active에 따라 total_weight 설정
+    let activeBucketWeight = mockData.total_weight; // 기본값
+
+    if (equipmentData?.bucket_active) {
+      switch (equipmentData.bucket_active) {
+        case "bucket1":
+          activeBucketWeight = equipmentData.bucket1 || 0;
+          break;
+        case "bucket2":
+          activeBucketWeight = equipmentData.bucket2 || 0;
+          break;
+        case "bucket3":
+          activeBucketWeight = equipmentData.bucket3 || 0;
+          break;
+        case "bucket4":
+          activeBucketWeight = equipmentData.bucket4 || 0;
+          break;
+        default:
+          activeBucketWeight = equipmentData.bucket1 || 0;
+      }
+    }
+
     const responseData = {
       robot_code: robotCode,
-      total_weight: mockData.total_weight,
+      total_weight: activeBucketWeight,
       temperature: mockData.temperature,
       device_status: mockData.device_status,
       action_name: mockData.action_name || null,

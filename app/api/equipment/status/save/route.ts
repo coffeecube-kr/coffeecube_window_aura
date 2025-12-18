@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
       action_name,
       action_response,
       user_id,
+      description,
     } = body;
 
     // 필수 필드 확인 - 더 상세한 검증
@@ -67,6 +68,7 @@ export async function POST(request: NextRequest) {
             action_name,
             action_response,
             user_id,
+            description,
           },
         },
         { status: 400 }
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
       action_name: action_name ? String(action_name).trim() : null,
       action_response: action_response ? String(action_response).trim() : null,
       user_id: user_id ? String(user_id).trim() : null,
+      description: description ? String(description).trim() : null,
     };
 
     // 숫자 타입 유효성 검증

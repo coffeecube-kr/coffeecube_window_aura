@@ -109,6 +109,193 @@ export default function DashboardPanel() {
     });
   };
 
+  // 특정 device_status로 장비 상태 저장
+  const saveEquipmentStatusWithDeviceStatus = useCallback(
+    async (
+      deviceStatus: string,
+      equipmentData: EquipmentStatusData,
+      userId: string,
+      errorDescription?: string
+    ) => {
+      try {
+        if (!equipmentData || !robotCode || !userId) {
+          return;
+        }
+
+        const saveData = {
+          robot_code: robotCode,
+          total_weight: equipmentData.total_weight,
+          temperature: equipmentData.temperature,
+          device_status: deviceStatus,
+          action_name: equipmentData.action_name || null,
+          action_response: equipmentData.action_response || null,
+          user_id: userId,
+          description: errorDescription || null,
+        };
+
+        const response = await fetch("/api/equipment/status/save", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(saveData),
+        });
+
+        if (!response.ok && process.env.NODE_ENV === "development") {
+          console.log("Device Status Save Error:", await response.json());
+        }
+      } catch (error) {
+        if (process.env.NODE_ENV === "development") {
+          console.log("Device Status Save Network Error:", error);
+        }
+      }
+    },
+    [robotCode]
+  );
+
+  // RST0 전송 및 RST1 응답 확인 함수
+  const checkDeviceStatusWithRST = useCallback(
+    async (
+      currentEquipmentData: EquipmentStatusData,
+      currentUserId: string
+    ) => {
+      try {
+        if (!robotCode) return;
+
+        // Python 서버에 RST0 명령 전송
+        const rstResponse = await fetch("http://localhost:8000/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            command: "(RST0)",
+            timeout: 3.0,
+            max_retries: 1,
+          }),
+        });
+
+        if (!rstResponse.ok) {
+          // Python 서버 연결 실패 시 장애 상태로 저장
+          const errorMsg = `Python 서버 연결 실패: ${rstResponse.status} ${rstResponse.statusText}`;
+          console.log(errorMsg + " - 장애발생 상태로 저장");
+          await saveEquipmentStatusWithDeviceStatus(
+            "장애발생",
+            currentEquipmentData,
+            currentUserId,
+            errorMsg
+          );
+          return;
+        }
+
+        const rstResult = await rstResponse.json();
+
+        // RST1 응답 확인
+        if (rstResult.success && rstResult.responses.includes("(RST1)")) {
+          // RST1 수신 성공 - STRP 명령 전송하여 온도값 확인
+          console.log("RST1 응답 수신 - STRP 명령 전송하여 온도 확인");
+
+          const strpResponse = await fetch("http://localhost:8000/send", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              command: "(STRP)",
+              timeout: 3.0,
+              max_retries: 1,
+            }),
+          });
+
+          if (!strpResponse.ok) {
+            // STRP 전송 실패 시 장애 상태로 저장
+            const errorMsg = `STRP 전송 실패: ${strpResponse.status} ${strpResponse.statusText}`;
+            console.log(errorMsg + " - 장애발생 상태로 저장");
+            await saveEquipmentStatusWithDeviceStatus(
+              "장애발생",
+              currentEquipmentData,
+              currentUserId,
+              errorMsg
+            );
+            return;
+          }
+
+          const strpResult = await strpResponse.json();
+
+          if (strpResult.success && strpResult.responses.length > 0) {
+            // STRP 응답에서 온도값 파싱 (예: "(T+25)")
+            const tempResponse = strpResult.responses[0];
+            const tempMatch = tempResponse.match(/\(T\+(\d+)\)/);
+
+            if (tempMatch) {
+              // 온도값 추출 성공
+              const temperature = parseInt(tempMatch[1], 10);
+              console.log(`온도값 확인: ${temperature}°C`);
+
+              // 온도값을 덮어쓴 장비 데이터로 정상 상태 저장
+              const updatedEquipmentData = {
+                ...currentEquipmentData,
+                temperature: temperature,
+                device_status: "정상" as const,
+              };
+
+              setEquipmentData(updatedEquipmentData);
+
+              await saveEquipmentStatusWithDeviceStatus(
+                "정상",
+                updatedEquipmentData,
+                currentUserId
+              );
+            } else {
+              // 온도값 파싱 실패 시 장애 상태로 저장
+              const errorMsg = `온도값 파싱 실패: 응답값 ${tempResponse}`;
+              console.log(errorMsg + " - 장애발생 상태로 저장");
+              await saveEquipmentStatusWithDeviceStatus(
+                "장애발생",
+                currentEquipmentData,
+                currentUserId,
+                errorMsg
+              );
+            }
+          } else {
+            // STRP 응답 없음 - 장애 상태로 저장
+            const errorMsg = `STRP 응답 없음: ${JSON.stringify(strpResult)}`;
+            console.log(errorMsg + " - 장애발생 상태로 저장");
+            await saveEquipmentStatusWithDeviceStatus(
+              "장애발생",
+              currentEquipmentData,
+              currentUserId,
+              errorMsg
+            );
+          }
+        } else {
+          // RST1 미수신 - 장애 상태로 저장
+          const errorMsg = `RST1 응답 없음: ${JSON.stringify(rstResult)}`;
+          console.log(errorMsg + " - 장애발생 상태로 저장");
+          await saveEquipmentStatusWithDeviceStatus(
+            "장애발생",
+            currentEquipmentData,
+            currentUserId,
+            errorMsg
+          );
+        }
+      } catch (error) {
+        // 에러 발생 시 장애 상태로 저장
+        const errorMsg = `RST0/RST1/STRP 체크 오류: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+        console.log(errorMsg + " - 장애발생 상태로 저장:", error);
+        await saveEquipmentStatusWithDeviceStatus(
+          "장애발생",
+          currentEquipmentData,
+          currentUserId,
+          errorMsg
+        );
+      }
+    },
+    [robotCode, saveEquipmentStatusWithDeviceStatus]
+  );
+
   // 사용자 인증 정보 가져오기
   const fetchUserInfo = useCallback(async () => {
     try {
@@ -120,12 +307,15 @@ export default function DashboardPanel() {
 
       if (!error && user) {
         setUserId(user.id);
+        return user.id;
       }
+      return null;
     } catch (error) {
       // 개발 환경에서만 에러 로깅
       if (process.env.NODE_ENV === "development") {
         console.log("User fetch error:", error);
       }
+      return null;
     }
   }, []);
 
@@ -184,7 +374,7 @@ export default function DashboardPanel() {
   // API에서 장비 상태 데이터 가져오기
   const fetchEquipmentStatus = useCallback(async () => {
     try {
-      if (!robotCode) return;
+      if (!robotCode) return null;
 
       const response = await fetch(
         `/api/equipment/status?robot_code=${robotCode}`
@@ -192,14 +382,13 @@ export default function DashboardPanel() {
       const data = await response.json();
 
       if (response.ok) {
-        // API에서 받은 온도만 초기화 (장비 상태는 시리얼 통신으로 설정)
-        setEquipmentData({
-          ...data,
-          temperature: 99,
-        });
+        // 데이터만 반환 (setEquipmentData는 호출하지 않음)
+        return data;
       }
+      return null;
     } catch {
       // 에러 발생 시 기본값 유지
+      return null;
     } finally {
       setIsLoading(false);
     }
@@ -259,30 +448,27 @@ export default function DashboardPanel() {
     const initializeData = async () => {
       if (!isInitialized && robotCode) {
         // 사용자 정보와 장비 상태 데이터를 순서대로 가져오기
-        await fetchUserInfo();
-        await fetchEquipmentStatus();
+        const fetchedUserId = await fetchUserInfo();
+        const fetchedEquipmentData = await fetchEquipmentStatus();
         await fetchAdminButtons();
 
-        // 초기 온도 읽기
-        await updateTemperature();
+        // 초기 장비 데이터 설정
+        if (fetchedEquipmentData) {
+          setEquipmentData(fetchedEquipmentData);
+        }
 
-        // 초기 장비 상태 확인
-        await updateDeviceStatus();
+        // 장비 상태 체크 (RST0 전송 및 RST1 응답 확인)
+        // checkDeviceStatusWithRST에서 온도와 장비 상태를 모두 업데이트하고 /save 호출
+        if (fetchedEquipmentData && fetchedUserId) {
+          await checkDeviceStatusWithRST(fetchedEquipmentData, fetchedUserId);
+        }
 
         setIsInitialized(true);
       }
     };
 
     initializeData();
-  }, [
-    fetchUserInfo,
-    fetchEquipmentStatus,
-    fetchAdminButtons,
-    updateTemperature,
-    updateDeviceStatus,
-    isInitialized,
-    robotCode,
-  ]);
+  }, [isInitialized, robotCode]); // 초기 진입 시에만 실행
 
   // 온도 및 장비 상태 주기적 업데이트 (30초마다)
   useEffect(() => {
@@ -297,21 +483,7 @@ export default function DashboardPanel() {
   }, [isInitialized, robotCode, updateTemperature, updateDeviceStatus]);
 
   // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
-  useEffect(() => {
-    const saveInitialData = async () => {
-      if (
-        isInitialized &&
-        equipmentData &&
-        userId &&
-        !hasSavedInitialData.current
-      ) {
-        await saveEquipmentStatus();
-        hasSavedInitialData.current = true;
-      }
-    };
-
-    saveInitialData();
-  }, [isInitialized, equipmentData, userId, saveEquipmentStatus]);
+  // checkDeviceStatusWithRST에서 이미 저장하므로 제거
 
   // 중량 초기화 버튼 클릭 핸들러
   const handleResetWeight = async () => {
@@ -710,7 +882,7 @@ export default function DashboardPanel() {
                 냉장 온도
               </div>
               <div className="flex gap-3 justify-center items-center max-sm:gap-2">
-                {isLoading || isTempReading ? (
+                {isLoading || isTempReading || !equipmentData?.temperature ? (
                   <Skeleton className="h-[56px] w-[120px] max-md:h-[48px] max-md:w-[100px] max-sm:h-[40px] max-sm:w-[80px]" />
                 ) : (
                   <>
@@ -721,10 +893,7 @@ export default function DashboardPanel() {
                       height={40}
                     />
                     <div className="text-4xl font-bold leading-[56px] text-neutral-800 max-md:text-4xl max-sm:text-3xl">
-                      {serialTemperature !== null
-                        ? serialTemperature
-                        : equipmentData?.temperature}
-                      °C
+                      {equipmentData?.temperature}°C
                     </div>
                   </>
                 )}
