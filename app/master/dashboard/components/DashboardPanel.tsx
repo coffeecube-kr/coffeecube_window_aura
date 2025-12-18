@@ -239,7 +239,11 @@ export default function DashboardPanel() {
                 device_status: "정상" as const,
               };
 
-              setEquipmentData(updatedEquipmentData);
+              // 초기 데이터가 있고, 사용자가 명시적으로 새로고침하지 않은 경우에만 업데이트
+              if (initialDataRef.current) {
+                setEquipmentData(updatedEquipmentData);
+                initialDataRef.current = updatedEquipmentData; // 초기 데이터 업데이트
+              }
 
               await saveEquipmentStatusWithDeviceStatus(
                 "정상",
@@ -394,7 +398,7 @@ export default function DashboardPanel() {
     }
   }, [robotCode]);
 
-  // 온도 업데이트 함수
+  // 온도 업데이트 함수 - 수동으로만 호출되도록 수정
   const updateTemperature = useCallback(async () => {
     if (!robotCode || isTempReading) return;
 
@@ -402,15 +406,17 @@ export default function DashboardPanel() {
     // 온도를 못 가져오면 99로 설정
     const finalTemp = temp !== null ? temp : 99;
 
-    if (equipmentData) {
-      setEquipmentData({
+    if (equipmentData && initialDataRef.current) {
+      const updatedData = {
         ...equipmentData,
         temperature: finalTemp,
-      });
+      };
+      setEquipmentData(updatedData);
+      initialDataRef.current = updatedData; // 초기 데이터 업데이트
     }
   }, [robotCode, isTempReading, readTemperature, equipmentData]);
 
-  // 장비 상태 업데이트 함수
+  // 장비 상태 업데이트 함수 - 수동으로만 호출되도록 수정
   const updateDeviceStatus = useCallback(async () => {
     if (!robotCode || isStatusChecking || !equipmentData) return;
 
@@ -421,11 +427,13 @@ export default function DashboardPanel() {
       bucket4: equipmentData.bucket4 || 0,
     });
 
-    if (equipmentData) {
-      setEquipmentData({
+    if (equipmentData && initialDataRef.current) {
+      const updatedData = {
         ...equipmentData,
         device_status: status,
-      });
+      };
+      setEquipmentData(updatedData);
+      initialDataRef.current = updatedData; // 초기 데이터 업데이트
     }
   }, [robotCode, isStatusChecking, checkDeviceStatus, equipmentData]);
 
@@ -452,9 +460,10 @@ export default function DashboardPanel() {
         const fetchedEquipmentData = await fetchEquipmentStatus();
         await fetchAdminButtons();
 
-        // 초기 장비 데이터 설정
+        // 초기 장비 데이터 설정 및 저장
         if (fetchedEquipmentData) {
           setEquipmentData(fetchedEquipmentData);
+          initialDataRef.current = fetchedEquipmentData; // 초기 데이터 저장
         }
 
         // 장비 상태 체크 (RST0 전송 및 RST1 응답 확인)
@@ -468,22 +477,17 @@ export default function DashboardPanel() {
     };
 
     initializeData();
-  }, [isInitialized, robotCode]); // 초기 진입 시에만 실행
+  }, [
+    isInitialized,
+    robotCode,
+    checkDeviceStatusWithRST,
+    fetchAdminButtons,
+    fetchEquipmentStatus,
+    fetchUserInfo,
+  ]); // 초기 진입 시에만 실행
 
-  // 온도 및 장비 상태 주기적 업데이트 (30초마다)
-  useEffect(() => {
-    if (!isInitialized || !robotCode) return;
-
-    const intervalId = setInterval(() => {
-      updateTemperature();
-      updateDeviceStatus();
-    }, 30000); // 30초
-
-    return () => clearInterval(intervalId);
-  }, [isInitialized, robotCode, updateTemperature, updateDeviceStatus]);
-
-  // 사용자 정보와 장비 데이터가 모두 로드된 후에 저장 실행
-  // checkDeviceStatusWithRST에서 이미 저장하므로 제거
+  // 초기 데이터 저장을 위한 ref
+  const initialDataRef = useRef<EquipmentStatusData | null>(null);
 
   // 중량 초기화 버튼 클릭 핸들러
   const handleResetWeight = async () => {
